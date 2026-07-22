@@ -19,7 +19,8 @@ const envSchema = z.object({
   S3_FORCE_PATH_STYLE: z.coerce.boolean().default(true),
   PUSH_PUBLIC_KEY: z.string().optional().default(""),
   PUSH_PRIVATE_KEY: z.string().optional().default(""),
-  PUSH_SUBJECT: z.string().default("mailto:admin@example.com")
+  PUSH_SUBJECT: z.string().default("mailto:admin@example.com"),
+  RUN_WORKER_IN_API: z.coerce.boolean().default(false)
 });
 
 export const env = envSchema.parse(process.env);

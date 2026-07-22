@@ -12,6 +12,7 @@
     "test:e2e": "playwright test",
     "db:generate": "dotenv -e .env -- pnpm --filter @scan-krwalo/database db:generate",
     "db:migrate": "dotenv -e .env -- pnpm --filter @scan-krwalo/database db:migrate",
+    "db:deploy": "dotenv -e .env -- pnpm --filter @scan-krwalo/database db:deploy",
     "db:seed": "dotenv -e .env -- pnpm --filter @scan-krwalo/database db:seed",
     "docker:up": "docker compose up -d",
     "docker:down": "docker compose down"

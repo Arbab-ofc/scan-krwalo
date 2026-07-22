@@ -185,10 +185,96 @@ Payouts reserve funds first: available balance decreases and reserved-for-payout
 
 ## Deployment Notes
 
-- Run API, worker, and web as separate processes.
+- Run API, worker, and web as separate processes for paid production.
+- For a free Render setup, `render.yaml` runs the API and BullMQ workers in one web service with `RUN_WORKER_IN_API=true`.
 - Use managed PostgreSQL and Redis.
-- Use R2/S3/MinIO-compatible object storage for proofs.
+- Use R2/S3/MinIO-compatible object storage for proofs. Render's local filesystem is ephemeral and should not be used for permanent proof files.
 - Set strong `JWT_ACCESS_SECRET` and `JWT_REFRESH_SECRET`.
-- Run `pnpm db:migrate` before starting new API versions.
-- Run at least one worker process for task expiry and auto-completion.
+- Run `pnpm db:deploy` before starting new API versions.
 - Configure CORS to the production web origin only.
+
+### Free Render API Deployment
+
+This repository includes `render.yaml` for deploying the API to Render as a Blueprint.
+
+Free-friendly architecture:
+
+- API: Render Web Service, free plan.
+- Database: Neon Postgres free plan.
+- Redis: Upstash Redis free plan.
+- Proof storage: Cloudflare R2 free tier.
+- Frontend: Vercel Hobby or another static/Next.js host. Vercel Hobby is for personal use, so use a business-appropriate plan/provider when required.
+
+Render steps:
+
+1. Push this repository to GitHub.
+2. Create a Neon Postgres database and copy its pooled connection string.
+3. Create an Upstash Redis database and copy the Redis URL.
+4. Create a Cloudflare R2 bucket and access keys.
+5. In Render, choose **New > Blueprint** and connect this repository.
+6. Render will read `render.yaml` and create `scan-krwalo-api`.
+7. Add the required environment variables in Render before the first deploy completes.
+
+Required Render environment variables:
+
+```bash
+WEB_URL=https://your-frontend-domain.com
+API_URL=https://your-render-service.onrender.com
+CORS_ORIGINS=https://your-frontend-domain.com
+DATABASE_URL=postgresql://...
+REDIS_URL=rediss://...
+JWT_ACCESS_SECRET=use-a-long-random-secret
+JWT_REFRESH_SECRET=use-another-long-random-secret
+S3_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com
+S3_REGION=auto
+S3_BUCKET=scan-krwalo-proofs
+S3_ACCESS_KEY=...
+S3_SECRET_KEY=...
+S3_FORCE_PATH_STYLE=true
+PUSH_PUBLIC_KEY=...
+PUSH_PRIVATE_KEY=...
+PUSH_SUBJECT=mailto:admin@example.com
+RUN_WORKER_IN_API=true
+```
+
+Optional seed variables, only when running the seed command:
+
+```bash
+ADMIN_SEED_USERNAME=admin
+ADMIN_SEED_EMAIL=admin@example.com
+ADMIN_SEED_PASSWORD=change-this-to-a-strong-password
+```
+
+To seed the production admin once from your machine, temporarily point your local `.env` at the production `DATABASE_URL`, set the `ADMIN_SEED_*` variables, then run:
+
+```bash
+pnpm db:generate
+pnpm db:seed
+```
+
+Do not commit production secrets.
+
+Frontend deployment:
+
+1. Deploy `apps/web` to Vercel or another Next.js host.
+2. Set these frontend environment variables:
+
+```bash
+NEXT_PUBLIC_API_URL=https://your-render-service.onrender.com/api/v1
+NEXT_PUBLIC_SOCKET_URL=https://your-render-service.onrender.com
+```
+
+3. After the frontend URL is assigned, update Render:
+
+```bash
+WEB_URL=https://your-frontend-domain.com
+CORS_ORIGINS=https://your-frontend-domain.com
+API_URL=https://your-render-service.onrender.com
+```
+
+Free plan limitations:
+
+- Render free web services spin down after idle time, so the first request after inactivity can be slow.
+- Background jobs only run while the free API service is awake when `RUN_WORKER_IN_API=true`.
+- For business-critical usage, move the worker to a dedicated paid Render Background Worker and set `RUN_WORKER_IN_API=false` on the API.
+- Do not rely on Render's filesystem for uploaded proof images.
