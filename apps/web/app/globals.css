@@ -1,0 +1,28 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  margin: 0;
+  background: #f7faf9;
+  color: #10201d;
+}
+
+.focus-ring {
+  @apply focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-white;
+}
+
+input,
+select,
+textarea {
+  color: #10201d;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #64748b;
+}

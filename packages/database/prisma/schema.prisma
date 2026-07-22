@@ -1,0 +1,520 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  USER
+  ADMIN
+  SCANNER
+  CLIENT
+}
+
+enum ActivationStatus {
+  INACTIVE
+  ACTIVE
+}
+
+enum AccountStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+enum ActivationCodeType {
+  SCANNER
+  CLIENT
+}
+
+enum ActivationCodeStatus {
+  ACTIVE
+  REDEEMED
+  EXPIRED
+  REVOKED
+}
+
+enum ScannerStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+enum ClientStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+enum TaskStatus {
+  DRAFT
+  AVAILABLE
+  CLAIMED
+  SCANNER_SUBMITTED
+  CLIENT_CONFIRMED
+  COMPLETED
+  CLAIM_EXPIRED
+  COMPLETION_EXPIRED
+  CLIENT_REVIEW_EXPIRED
+  CANCELLED
+  DISPUTED
+  REFUNDED
+  REJECTED
+  AUTO_COMPLETED
+}
+
+enum PostedByRole {
+  ADMIN
+  CLIENT
+}
+
+enum RewardSource {
+  DEFAULT
+  ADMIN_CUSTOM
+}
+
+enum CreditTransactionType {
+  ACTIVATION_CODE_REDEMPTION
+  TASK_RESERVATION
+  TASK_COMPLETION
+  TASK_REFUND
+  ADMIN_ADJUSTMENT
+  REVERSAL
+}
+
+enum LedgerDirection {
+  CREDIT
+  DEBIT
+}
+
+enum WalletTransactionType {
+  TASK_REWARD
+  PAYOUT_RESERVATION
+  PAYOUT_COMPLETION
+  PAYOUT_RELEASE
+  ADMIN_ADJUSTMENT
+  REVERSAL
+}
+
+enum PayoutStatus {
+  REQUESTED
+  PROCESSING
+  PAID
+  REJECTED
+  CANCELLED
+}
+
+enum PayoutMethod {
+  BINANCE_ID
+  USDT_BEP20
+}
+
+enum DisputeStatus {
+  OPEN
+  UNDER_REVIEW
+  RESOLVED_FOR_SCANNER
+  RESOLVED_FOR_CLIENT
+  CANCELLED
+}
+
+enum NotificationType {
+  TASK_AVAILABLE
+  TASK_CLAIMED
+  TASK_NO_LONGER_AVAILABLE
+  TASK_COMPLETION_WARNING
+  TASK_COMPLETION_EXPIRED
+  TASK_SUBMITTED
+  TASK_CONFIRMED
+  TASK_DISPUTED
+  TASK_AUTO_COMPLETED
+  WALLET_CREDITED
+  PAYOUT_REQUESTED
+  PAYOUT_PROCESSING
+  PAYOUT_PAID
+  PAYOUT_REJECTED
+  CODE_REDEEMED
+  ACCOUNT_SUSPENDED
+  SYSTEM
+}
+
+model User {
+  id                 String           @id @default(cuid())
+  username           String           @unique
+  email              String           @unique
+  passwordHash       String
+  role               UserRole         @default(USER)
+  activationStatus   ActivationStatus @default(INACTIVE)
+  accountStatus      AccountStatus    @default(ACTIVE)
+  emailVerifiedAt    DateTime?
+  suspendedAt        DateTime?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  sessions           UserSession[]
+  scannerProfile     ScannerProfile?
+  clientProfile      ClientProfile?
+  redeemedCodes      ActivationCode[] @relation("RedeemedCodes")
+  createdCodes       ActivationCode[] @relation("CreatedCodes")
+  notifications      Notification[]
+  pushSubscriptions  PushSubscription[]
+  auditLogs          AuditLog[]       @relation("ActorAuditLogs")
+
+  @@index([role])
+}
+
+model UserSession {
+  id           String    @id @default(cuid())
+  userId       String
+  tokenHash    String    @unique
+  userAgent    String?
+  ipAddress    String?
+  expiresAt    DateTime
+  revokedAt    DateTime?
+  createdAt    DateTime  @default(now())
+  rotatedAt    DateTime?
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model ScannerProfile {
+  id                    String          @id @default(cuid())
+  userId                String          @unique
+  status                ScannerStatus   @default(ACTIVE)
+  isOnline              Boolean         @default(false)
+  lastHeartbeatAt       DateTime?
+  binanceId             String?
+  usdtBep20Address      String?
+  preferredPayoutMethod PayoutMethod?
+  availableBalance      BigInt          @default(0)
+  pendingBalance        BigInt          @default(0)
+  reservedForPayout     BigInt          @default(0)
+  lifetimeEarnings      BigInt          @default(0)
+  lifetimePaid          BigInt          @default(0)
+  completedTaskCount    Int             @default(0)
+  failedTaskCount       Int             @default(0)
+  expiredTaskCount      Int             @default(0)
+  disputedTaskCount     Int             @default(0)
+  successRate           Decimal         @default(0)
+  lastTaskClaimedAt     DateTime?
+  suspendedAt           DateTime?
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+  user                  User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  claims                TaskClaim[]
+  assignedTasks         Task[]
+  wallet                ScannerWallet?
+  payouts               PayoutRequest[]
+}
+
+model ClientProfile {
+  id                    String          @id @default(cuid())
+  userId                String          @unique
+  status                ClientStatus    @default(ACTIVE)
+  availableTaskCredits  Int             @default(0)
+  reservedTaskCredits   Int             @default(0)
+  usedTaskCredits       Int             @default(0)
+  totalPurchasedCredits Int             @default(0)
+  totalPostedTasks      Int             @default(0)
+  completedTasks        Int             @default(0)
+  cancelledTasks        Int             @default(0)
+  disputedTasks         Int             @default(0)
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+  user                  User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  creditAccount         ClientCreditAccount?
+  tasks                 Task[]
+}
+
+model ActivationCode {
+  id                 String               @id @default(cuid())
+  codeHash           String               @unique
+  fullCode           String?              @unique
+  codePreview        String
+  codeType           ActivationCodeType
+  initialTaskCredits Int?
+  recordedPrice      BigInt?
+  status             ActivationCodeStatus @default(ACTIVE)
+  expiresAt          DateTime?
+  createdByAdminId   String
+  createdAt          DateTime             @default(now())
+  redeemedByUserId   String?
+  redeemedAt         DateTime?
+  revokedAt          DateTime?
+  revokedByAdminId   String?
+  revocationReason   String?
+  metadata           Json?
+  createdByAdmin     User                 @relation("CreatedCodes", fields: [createdByAdminId], references: [id])
+  redeemedByUser     User?                @relation("RedeemedCodes", fields: [redeemedByUserId], references: [id])
+
+  @@index([status])
+  @@index([codeType])
+  @@index([codePreview])
+}
+
+model SystemSetting {
+  key             String   @id
+  value           Json
+  updatedAt       DateTime @updatedAt
+  updatedByUserId String?
+}
+
+model Task {
+  id                         String          @id @default(cuid())
+  publicId                   String          @unique
+  postedByUserId             String
+  postedByRole               PostedByRole
+  clientId                   String?
+  url                        String
+  normalizedUrl              String
+  urlHash                    String
+  title                      String?
+  instructions               String?
+  status                     TaskStatus      @default(DRAFT)
+  rewardAmount               BigInt
+  rewardCurrency             String          @default("USDT")
+  rewardSource               RewardSource    @default(DEFAULT)
+  rewardConfiguredAt         DateTime
+  claimWindowSeconds         Int
+  completionWindowSeconds    Int
+  clientReviewWindowSeconds  Int
+  publishedAt                DateTime?
+  claimExpiresAt             DateTime?
+  claimedAt                  DateTime?
+  completionExpiresAt        DateTime?
+  scannerSubmittedAt         DateTime?
+  clientConfirmedAt          DateTime?
+  completedAt                DateTime?
+  expiredAt                  DateTime?
+  cancelledAt                DateTime?
+  assignedScannerId          String?
+  version                    Int             @default(0)
+  createdAt                  DateTime        @default(now())
+  updatedAt                  DateTime        @updatedAt
+  client                     ClientProfile?  @relation(fields: [clientId], references: [id])
+  assignedScanner            ScannerProfile? @relation(fields: [assignedScannerId], references: [id])
+  claims                     TaskClaim[]
+  submissions                TaskSubmission[]
+  proofs                     TaskProof[]
+  events                     TaskEvent[]
+  dispute                    TaskDispute?
+
+  @@index([status])
+  @@index([claimExpiresAt])
+  @@index([completionExpiresAt])
+  @@index([assignedScannerId])
+  @@index([clientId])
+  @@index([urlHash])
+}
+
+model TaskClaim {
+  id         String          @id @default(cuid())
+  taskId     String
+  scannerId  String
+  status     TaskStatus
+  claimedAt  DateTime        @default(now())
+  releasedAt DateTime?
+  task       Task            @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  scanner    ScannerProfile  @relation(fields: [scannerId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, scannerId])
+  @@index([scannerId, status])
+}
+
+model TaskSubmission {
+  id             String   @id @default(cuid())
+  taskId         String
+  scannerId      String
+  note           String?
+  submittedAt    DateTime @default(now())
+  idempotencyKey String   @unique
+  task           Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+}
+
+model TaskProof {
+  id               String   @id @default(cuid())
+  taskId           String
+  uploadedByUserId String
+  storageKey       String
+  originalFilename String?
+  mimeType         String
+  size             Int
+  checksum         String?
+  createdAt        DateTime @default(now())
+  task             Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+}
+
+model TaskEvent {
+  id             String      @id @default(cuid())
+  taskId         String
+  eventType      String
+  previousStatus TaskStatus?
+  newStatus      TaskStatus
+  actorUserId    String?
+  actorRole      UserRole?
+  metadata       Json?
+  createdAt      DateTime    @default(now())
+  task           Task        @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId, createdAt])
+}
+
+model TaskDispute {
+  id                String        @id @default(cuid())
+  taskId            String        @unique
+  openedByUserId    String
+  reasonCode        String
+  description       String
+  status            DisputeStatus @default(OPEN)
+  scannerResponse   String?
+  adminResolution   String?
+  resolvedByAdminId String?
+  resolvedAt        DateTime?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  task              Task          @relation(fields: [taskId], references: [id], onDelete: Cascade)
+}
+
+model ClientCreditAccount {
+  id                  String                    @id @default(cuid())
+  clientId            String                    @unique
+  availableCredits    Int                       @default(0)
+  reservedCredits     Int                       @default(0)
+  usedCredits         Int                       @default(0)
+  totalAddedCredits   Int                       @default(0)
+  createdAt           DateTime                  @default(now())
+  updatedAt           DateTime                  @updatedAt
+  client              ClientProfile             @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  transactions        ClientCreditTransaction[]
+}
+
+model ClientCreditTransaction {
+  id                String                @id @default(cuid())
+  accountId         String
+  clientId          String
+  type              CreditTransactionType
+  amount            Int
+  direction         LedgerDirection
+  availableBefore   Int
+  availableAfter    Int
+  reservedBefore    Int
+  reservedAfter     Int
+  usedBefore        Int
+  usedAfter         Int
+  referenceType     String?
+  referenceId       String?
+  idempotencyKey    String                @unique
+  description       String?
+  createdAt         DateTime              @default(now())
+  createdByUserId   String?
+  account           ClientCreditAccount   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([clientId, createdAt])
+}
+
+model ScannerWallet {
+  id                  String                     @id @default(cuid())
+  scannerId           String                     @unique
+  availableBalance    BigInt                     @default(0)
+  pendingBalance      BigInt                     @default(0)
+  reservedForPayout   BigInt                     @default(0)
+  lifetimeEarnings    BigInt                     @default(0)
+  lifetimePaid        BigInt                     @default(0)
+  currency            String                     @default("USDT")
+  updatedAt           DateTime                   @updatedAt
+  scanner             ScannerProfile             @relation(fields: [scannerId], references: [id], onDelete: Cascade)
+  transactions        ScannerWalletTransaction[]
+}
+
+model ScannerWalletTransaction {
+  id                String                @id @default(cuid())
+  walletId          String
+  type              WalletTransactionType
+  direction         LedgerDirection
+  amount            BigInt
+  currency          String
+  availableBefore   BigInt
+  availableAfter    BigInt
+  pendingBefore     BigInt
+  pendingAfter      BigInt
+  reservedBefore    BigInt
+  reservedAfter     BigInt
+  referenceType     String?
+  referenceId       String?
+  idempotencyKey    String                @unique
+  description       String?
+  createdAt         DateTime              @default(now())
+  createdByUserId   String?
+  wallet            ScannerWallet         @relation(fields: [walletId], references: [id], onDelete: Cascade)
+
+  @@index([walletId, createdAt])
+}
+
+model PayoutRequest {
+  id                     String          @id @default(cuid())
+  scannerId              String
+  amount                 BigInt
+  currency               String
+  method                 PayoutMethod
+  destinationSnapshot    Json
+  status                 PayoutStatus    @default(REQUESTED)
+  requestedAt            DateTime        @default(now())
+  processingAt           DateTime?
+  paidAt                 DateTime?
+  rejectedAt             DateTime?
+  processedByAdminId     String?
+  transactionReference   String?
+  adminNote              String?
+  rejectionReason        String?
+  paymentProofStorageKey String?
+  idempotencyKey         String          @unique
+  createdAt              DateTime        @default(now())
+  updatedAt              DateTime        @updatedAt
+  scanner                ScannerProfile  @relation(fields: [scannerId], references: [id], onDelete: Cascade)
+
+  @@index([status, requestedAt])
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  type      NotificationType
+  title     String
+  message   String
+  payload   Json?
+  priority  Int              @default(0)
+  readAt    DateTime?
+  createdAt DateTime         @default(now())
+  expiresAt DateTime?
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt])
+}
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  endpoint  String   @unique
+  keys      Json
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model AuditLog {
+  id          String    @id @default(cuid())
+  actorUserId String?
+  actorRole   UserRole?
+  action      String
+  entityType  String
+  entityId    String?
+  ipAddress   String?
+  userAgent   String?
+  requestId   String?
+  beforeData  Json?
+  afterData   Json?
+  metadata    Json?
+  createdAt   DateTime  @default(now())
+  actor       User?      @relation("ActorAuditLogs", fields: [actorUserId], references: [id])
+
+  @@index([actorUserId, createdAt])
+  @@index([action, createdAt])
+}

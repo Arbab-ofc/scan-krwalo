@@ -1,0 +1,27 @@
+{
+  "name": "scan-krwalo",
+  "private": true,
+  "packageManager": "pnpm@9.15.4",
+  "scripts": {
+    "dev": "dotenv -e .env -- turbo dev",
+    "worker": "dotenv -e .env -- pnpm --filter @scan-krwalo/api worker",
+    "build": "turbo build",
+    "lint": "turbo lint",
+    "typecheck": "dotenv -e .env -- turbo typecheck",
+    "test": "dotenv -e .env -- turbo test",
+    "test:e2e": "playwright test",
+    "db:generate": "dotenv -e .env -- pnpm --filter @scan-krwalo/database db:generate",
+    "db:migrate": "dotenv -e .env -- pnpm --filter @scan-krwalo/database db:migrate",
+    "db:seed": "dotenv -e .env -- pnpm --filter @scan-krwalo/database db:seed",
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.1",
+    "dotenv-cli": "^8.0.0",
+    "turbo": "^2.3.3",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8",
+    "web-push": "^3.6.7"
+  }
+}

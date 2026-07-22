@@ -1,0 +1,16 @@
+node_modules
+.next
+dist
+.dist
+.distmkdir
+nano
+.pnpm-store
+.turbo
+.env
+coverage
+playwright-report
+test-results
+uploads
+apps/api/uploads
+*.tsbuildinfo
+*.log
