@@ -4,12 +4,14 @@ services:
     runtime: node
     plan: free
     rootDir: .
-    buildCommand: corepack enable && corepack prepare pnpm@9.15.4 --activate && pnpm install --frozen-lockfile && pnpm --filter @scan-krwalo/database db:deploy && pnpm --filter @scan-krwalo/shared build && pnpm --filter @scan-krwalo/database build && pnpm --filter @scan-krwalo/api build
+    buildCommand: pnpm install --frozen-lockfile && pnpm --filter @scan-krwalo/database db:deploy && pnpm --filter @scan-krwalo/shared build && pnpm --filter @scan-krwalo/database build && pnpm --filter @scan-krwalo/api build
     startCommand: pnpm --filter @scan-krwalo/api start
     healthCheckPath: /health
     envVars:
       - key: NODE_ENV
         value: production
+      - key: NODE_VERSION
+        value: 22.18.0
       - key: RUN_WORKER_IN_API
         value: "true"
       - key: JWT_ACCESS_EXPIRES_IN
