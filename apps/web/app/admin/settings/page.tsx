@@ -25,6 +25,7 @@ type TelegramWebhookInfo = {
   lastErrorMessage: string | null;
   allowedUpdates: string[];
   recentEvents: Array<{ action: string; createdAt: string; metadata: unknown }>;
+  recentTaskNotifications: Array<{ taskId: string | null; createdAt: string; metadata: unknown }>;
 };
 
 export default function AdminSettingsPage() {
@@ -215,6 +216,16 @@ export default function AdminSettingsPage() {
                       {webhookInfo.recentEvents.slice(0, 5).map((event) => (
                         <p key={`${event.action}-${event.createdAt}`} className="break-safe">
                           {new Date(event.createdAt).toLocaleString()} - {event.action.replace("TELEGRAM_WEBHOOK_", "").toLowerCase()}
+                        </p>
+                      ))}
+                    </div>
+                  )}
+                  {webhookInfo.recentTaskNotifications.length > 0 && (
+                    <div className="mt-3 grid gap-1">
+                      <p className="font-semibold text-ink">Recent task alerts</p>
+                      {webhookInfo.recentTaskNotifications.slice(0, 5).map((event) => (
+                        <p key={`${event.taskId}-${event.createdAt}`} className="break-safe">
+                          {new Date(event.createdAt).toLocaleString()} - {JSON.stringify(event.metadata)}
                         </p>
                       ))}
                     </div>

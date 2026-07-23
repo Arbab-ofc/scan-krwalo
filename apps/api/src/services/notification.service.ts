@@ -26,8 +26,7 @@ export async function notifyEligibleOnlineScannersForTask(taskId: string) {
   const scanners = await prisma.scannerProfile.findMany({
     where: {
       status: "ACTIVE",
-      user: { role: "SCANNER", activationStatus: "ACTIVE", accountStatus: "ACTIVE" },
-      assignedTasks: { none: { status: { in: ["CLAIMED", "SCANNER_SUBMITTED", "DISPUTED"] } } }
+      user: { role: "SCANNER", activationStatus: "ACTIVE", accountStatus: "ACTIVE" }
     },
     select: { userId: true, telegramChatId: true }
   });
@@ -46,14 +45,22 @@ export async function notifyEligibleOnlineScannersForTask(taskId: string) {
     url: "/scanner/live-tasks",
     tag: `task:${task.id}`
   })));
-  await Promise.all(scanners
+  const telegramResults = await Promise.all(scanners
     .filter((scanner): scanner is { userId: string; telegramChatId: string } => Boolean(scanner.telegramChatId))
-    .map((scanner) => sendTaskTelegramNotification({
-      chatId: scanner.telegramChatId,
-      publicId: task.publicId,
-      title: task.title,
-      normalizedUrl: task.normalizedUrl
-    }).catch((error) => console.error("Failed to send Telegram task notification", { userId: scanner.userId, taskId, error }))));
+    .map(async (scanner) => {
+      try {
+        await sendTaskTelegramNotification({
+          chatId: scanner.telegramChatId,
+          publicId: task.publicId,
+          title: task.title,
+          normalizedUrl: task.normalizedUrl
+        });
+        return { userId: scanner.userId, sent: true };
+      } catch (error) {
+        console.error("Failed to send Telegram task notification", { userId: scanner.userId, taskId, error });
+        return { userId: scanner.userId, sent: false, error: error instanceof Error ? error.message : "Unknown Telegram error" };
+      }
+    }));
   await prisma.auditLog.create({
     data: {
       action: "TASK_NOTIFICATIONS_SENT",
@@ -61,7 +68,9 @@ export async function notifyEligibleOnlineScannersForTask(taskId: string) {
       entityId: task.id,
       metadata: {
         scannerCount: scanners.length,
-        telegramCount: scanners.filter((scanner) => scanner.telegramChatId).length
+        telegramCount: scanners.filter((scanner) => scanner.telegramChatId).length,
+        telegramSentCount: telegramResults.filter((result) => result.sent).length,
+        telegramFailed: telegramResults.filter((result) => !result.sent).slice(0, 5)
       }
     }
   });

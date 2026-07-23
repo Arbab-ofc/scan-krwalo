@@ -176,7 +176,8 @@ export async function getTelegramWebhookInfo() {
     lastErrorDate: body.result?.last_error_date ? new Date(body.result.last_error_date * 1000).toISOString() : null,
     lastErrorMessage: body.result?.last_error_message ?? null,
     allowedUpdates: body.result?.allowed_updates ?? [],
-    recentEvents: await getRecentTelegramWebhookEvents()
+    recentEvents: await getRecentTelegramWebhookEvents(),
+    recentTaskNotifications: await getRecentTaskNotificationEvents()
   };
 }
 
@@ -235,6 +236,20 @@ async function getRecentTelegramWebhookEvents() {
   });
   return rows.map((row) => ({
     action: row.action,
+    metadata: row.metadata,
+    createdAt: row.createdAt.toISOString()
+  }));
+}
+
+async function getRecentTaskNotificationEvents() {
+  const rows = await prisma.auditLog.findMany({
+    where: { action: "TASK_NOTIFICATIONS_SENT" },
+    orderBy: { createdAt: "desc" },
+    take: 10,
+    select: { entityId: true, metadata: true, createdAt: true }
+  });
+  return rows.map((row) => ({
+    taskId: row.entityId,
     metadata: row.metadata,
     createdAt: row.createdAt.toISOString()
   }));
