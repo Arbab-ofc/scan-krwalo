@@ -46,7 +46,10 @@ export async function sendPushNotificationNow(userId: string, payload: PushPaylo
     sent: result.sent ? 1 : 0,
     removed: 0,
     failed: result.sent ? 0 : 1,
-    errors: result.sent ? [] : [result.error ?? "OneSignal did not accept the push notification."]
+    errors: result.sent ? [] : [result.error ?? "OneSignal did not accept the push notification."],
+    provider: "onesignal",
+    messageId: result.id ?? null,
+    warnings: result.warnings ?? null
   };
 }
 
@@ -72,7 +75,7 @@ async function sendOneSignalPush(externalUserIds: string[], payload: PushPayload
   if (!response.ok || !body?.id) {
     return { sent: false, error: oneSignalErrorMessage(response.status, body) };
   }
-  return { sent: true, id: body.id };
+  return { sent: true, id: body.id, warnings: body.warnings };
 }
 
 function absoluteUrl(url?: string) {
