@@ -211,6 +211,8 @@ function PushNotificationsCard() {
         setMessage(`Test push sent to ${result.sent} device${result.sent === 1 ? "" : "s"}.`);
       } else if (result.attempted === 0) {
         setMessage("No push subscription is saved for this account. Refresh the subscription first.");
+      } else if (result.errors?.length) {
+        setMessage(result.errors[0] ?? "The server found a subscription but could not send a test push.");
       } else {
         setMessage("The server found a subscription but could not send a test push.");
       }

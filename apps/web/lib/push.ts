@@ -34,7 +34,7 @@ export async function enablePushNotifications() {
 }
 
 export async function sendTestPushNotification() {
-  return api<{ configured: boolean; attempted: number; sent: number; removed: number }>("/push-subscriptions/test", {
+  return api<{ configured: boolean; attempted: number; sent: number; removed: number; failed: number; errors: string[] }>("/push-subscriptions/test", {
     method: "POST"
   });
 }
