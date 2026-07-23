@@ -115,7 +115,7 @@ export async function handleTelegramWebhook(update: TelegramUpdate) {
     });
   });
   await sendTelegramMessage(String(chatId), `Telegram alerts are linked for ${scanner.user.username}. New live tasks will appear here.`);
-  return { handled: true };
+  return { handled: true, linked: true };
 }
 
 export async function configureTelegramWebhook() {
@@ -129,6 +129,7 @@ export async function configureTelegramWebhook() {
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
       url: webhookUrl,
+      allowed_updates: ["message"],
       ...(config.webhookSecret ? { secret_token: config.webhookSecret } : {})
     })
   });
@@ -137,6 +138,38 @@ export async function configureTelegramWebhook() {
     throw new DomainError("TELEGRAM_WEBHOOK_FAILED", body?.description ?? "Could not configure Telegram webhook.", 502);
   }
   return { configured: true, webhookUrl };
+}
+
+export async function getTelegramWebhookInfo() {
+  const config = await getTelegramBotConfig();
+  if (!config.token || !config.username) {
+    throw new DomainError("TELEGRAM_NOT_CONFIGURED", "Telegram bot token and username are required.", 400);
+  }
+  const response = await fetch(`https://api.telegram.org/bot${config.token}/getWebhookInfo`);
+  const body = await response.json().catch(() => null) as {
+    ok?: boolean;
+    result?: {
+      url?: string;
+      has_custom_certificate?: boolean;
+      pending_update_count?: number;
+      last_error_date?: number;
+      last_error_message?: string;
+      max_connections?: number;
+      allowed_updates?: string[];
+    };
+    description?: string;
+  } | null;
+  if (!response.ok || !body?.ok) {
+    throw new DomainError("TELEGRAM_WEBHOOK_FAILED", body?.description ?? "Could not read Telegram webhook info.", 502);
+  }
+  return {
+    configured: Boolean(body.result?.url),
+    url: body.result?.url ?? "",
+    pendingUpdateCount: body.result?.pending_update_count ?? 0,
+    lastErrorDate: body.result?.last_error_date ? new Date(body.result.last_error_date * 1000).toISOString() : null,
+    lastErrorMessage: body.result?.last_error_message ?? null,
+    allowedUpdates: body.result?.allowed_updates ?? []
+  };
 }
 
 export async function sendTaskTelegramNotification(input: {

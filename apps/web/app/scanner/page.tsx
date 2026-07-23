@@ -66,6 +66,23 @@ function TelegramNotificationsCard() {
     load().catch((error) => setMessage(error instanceof Error ? error.message : "Could not load Telegram status."));
   }, []);
 
+  useEffect(() => {
+    if (!deepLink || status?.linked) return undefined;
+    let attempts = 0;
+    const timer = window.setInterval(() => {
+      attempts += 1;
+      load().catch(() => undefined);
+      if (attempts >= 20) window.clearInterval(timer);
+    }, 3000);
+    return () => window.clearInterval(timer);
+  }, [deepLink, status?.linked]);
+
+  useEffect(() => {
+    if (!status?.linked) return;
+    setDeepLink(null);
+    setMessage("Telegram alerts are linked. Check your bot for the welcome message.");
+  }, [status?.linked]);
+
   async function linkTelegram() {
     setLoading(true);
     setMessage("");
@@ -74,6 +91,7 @@ function TelegramNotificationsCard() {
       setStatus((current) => ({ ...(current ?? result), enabled: result.enabled, username: result.username, linked: result.linked }));
       setDeepLink(result.deepLink);
       if (!result.enabled) setMessage("Telegram bot is not configured on the server.");
+      else if (result.deepLink) setMessage("Open Telegram and press Start. This card will update after the bot links.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not create Telegram link.");
     } finally {
@@ -106,7 +124,7 @@ function TelegramNotificationsCard() {
           </p>
           {status?.linked && (
             <p className="mt-3 inline-flex rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-800">
-              Linked{status.telegramUsername ? ` to @${status.telegramUsername}` : ""}
+              Linked{status.telegramUsername ? ` to @${status.telegramUsername}` : ""}{status.linkedAt ? ` on ${new Date(status.linkedAt).toLocaleString()}` : ""}
             </p>
           )}
         </div>
@@ -204,6 +222,8 @@ function PushNotificationsCard() {
     setTesting(true);
     setMessage("");
     try {
+      await enablePushNotifications();
+      setStatus(pushSupportStatus());
       const result = await sendTestPushNotification();
       if (!result.configured) {
         setMessage("Push notifications are not configured on the server.");

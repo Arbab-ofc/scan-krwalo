@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { requireRole } from "../authz.js";
 import { ok } from "../http.js";
 import { getAdminSettings, getSettings, updateSettings } from "../services/settings.service.js";
-import { configureTelegramWebhook } from "../services/telegram.service.js";
+import { configureTelegramWebhook, getTelegramWebhookInfo } from "../services/telegram.service.js";
 import { telegramContactUrl } from "@scan-krwalo/shared";
 
 export async function registerSettingsRoutes(app: FastifyInstance) {
@@ -29,5 +29,9 @@ export async function registerSettingsRoutes(app: FastifyInstance) {
     const body = request.body as Record<string, unknown> | undefined;
     if (body && Object.keys(body).length > 0) await updateSettings(body, user.id);
     return ok(reply, await configureTelegramWebhook());
+  });
+  app.get("/admin/telegram/webhook", async (request, reply) => {
+    await requireRole(request, ["ADMIN"]);
+    return ok(reply, await getTelegramWebhookInfo());
   });
 }

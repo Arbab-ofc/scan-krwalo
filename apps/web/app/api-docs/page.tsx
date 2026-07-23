@@ -145,6 +145,7 @@ const groups: Group[] = [
       ["POST", "/api/v1/admin/payouts/:id/reject", "Admin", "Reject payout."],
       ["GET", "/api/v1/admin/settings", "Admin", "Read system settings."],
       ["PATCH", "/api/v1/admin/settings", "Admin", "Update system settings."],
+      ["GET", "/api/v1/admin/telegram/webhook", "Admin", "Read Telegram webhook URL, pending updates, and last error."],
       ["POST", "/api/v1/admin/telegram/webhook", "Admin", "Save optional bot settings and install the Telegram webhook."],
       ["GET", "/api/v1/admin/audit-logs", "Admin", "Paginated audit log."]
     ].map(endpoint)
