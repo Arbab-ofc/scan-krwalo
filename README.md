@@ -256,14 +256,20 @@ S3_BUCKET=scan-krwalo-proofs
 S3_ACCESS_KEY=...
 S3_SECRET_KEY=...
 S3_FORCE_PATH_STYLE=true
-PUSH_PUBLIC_KEY=...
-PUSH_PRIVATE_KEY=...
-PUSH_SUBJECT=mailto:admin@example.com
+ONESIGNAL_APP_ID=...
+ONESIGNAL_REST_API_KEY=...
 TELEGRAM_BOT_TOKEN=...
 TELEGRAM_BOT_USERNAME=YourBotUsername
 TELEGRAM_WEBHOOK_SECRET=optional-random-secret
 RUN_WORKER_IN_API=true
 ```
+
+OneSignal web push alerts:
+
+1. Create a OneSignal Web Push app for the exact production site origin.
+2. Set `ONESIGNAL_APP_ID` and `ONESIGNAL_REST_API_KEY` on the API deployment.
+3. Confirm `https://your-web-domain.com/OneSignalSDKWorker.js` is publicly accessible.
+4. Scanners click **Enable push notifications** from the scanner dashboard. The browser is linked to the app user ID through OneSignal `external_id`.
 
 Telegram scanner alerts:
 

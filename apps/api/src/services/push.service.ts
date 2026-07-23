@@ -1,25 +1,20 @@
-import { createRequire } from "node:module";
-import { prisma } from "@scan-krwalo/database";
 import { env } from "../env.js";
 import { pushNotificationsQueue } from "../queues.js";
 import { getSettings } from "./settings.service.js";
 
-const require = createRequire(import.meta.url);
-const webPush = require("web-push") as typeof import("web-push");
-const pushConfigured = Boolean(env.PUSH_PUBLIC_KEY && env.PUSH_PRIVATE_KEY);
+type PushPayload = { title: string; body: string; url?: string; tag?: string };
 
-if (pushConfigured) {
-  webPush.setVapidDetails(env.PUSH_SUBJECT, env.PUSH_PUBLIC_KEY, env.PUSH_PRIVATE_KEY);
-}
+const pushConfigured = Boolean(env.ONESIGNAL_APP_ID && env.ONESIGNAL_REST_API_KEY);
 
 export function getPushConfig() {
   return {
     enabled: pushConfigured,
-    publicKey: pushConfigured ? env.PUSH_PUBLIC_KEY : null
+    provider: "onesignal",
+    appId: env.ONESIGNAL_APP_ID || null
   };
 }
 
-export async function enqueuePushNotification(userId: string, payload: { title: string; body: string; url?: string; tag?: string }) {
+export async function enqueuePushNotification(userId: string, payload: PushPayload) {
   if (!pushConfigured) return;
   const settings = await getSettings();
   if (!settings.browserPushEnabled) return;
@@ -38,73 +33,57 @@ export async function enqueuePushNotification(userId: string, payload: { title: 
   ]);
 }
 
-export async function sendQueuedPushNotification(userId: string, payload: { title: string; body: string; url?: string; tag?: string }) {
-  if (!pushConfigured) return;
-  const subscriptions = await prisma.pushSubscription.findMany({ where: { userId } });
-  await Promise.all(subscriptions.map(async (subscription) => {
-    const pushSubscription = toWebPushSubscription(subscription.endpoint, subscription.keys);
-    if (!pushSubscription) {
-      await prisma.pushSubscription.deleteMany({ where: { endpoint: subscription.endpoint } });
-      return;
-    }
-    try {
-      await webPush.sendNotification(pushSubscription, JSON.stringify(payload));
-    } catch (error) {
-      const statusCode = typeof error === "object" && error && "statusCode" in error ? Number(error.statusCode) : null;
-      if (statusCode === 404 || statusCode === 410) {
-        await prisma.pushSubscription.deleteMany({ where: { endpoint: subscription.endpoint } });
-      }
-    }
-  }));
+export async function sendQueuedPushNotification(userId: string, payload: PushPayload) {
+  await sendOneSignalPush([userId], payload);
 }
 
-export async function sendPushNotificationNow(userId: string, payload: { title: string; body: string; url?: string; tag?: string }) {
+export async function sendPushNotificationNow(userId: string, payload: PushPayload) {
   if (!pushConfigured) return { configured: false, attempted: 0, sent: 0, removed: 0, failed: 0, errors: [] as string[] };
-  const subscriptions = await prisma.pushSubscription.findMany({ where: { userId } });
-  let sent = 0;
-  let removed = 0;
-  let failed = 0;
-  const errors: string[] = [];
-  await Promise.all(subscriptions.map(async (subscription) => {
-    const pushSubscription = toWebPushSubscription(subscription.endpoint, subscription.keys);
-    if (!pushSubscription) {
-      await prisma.pushSubscription.deleteMany({ where: { endpoint: subscription.endpoint } });
-      removed += 1;
-      errors.push("Removed a malformed push subscription. Enable push notifications again on this device.");
-      return;
-    }
-    try {
-      await webPush.sendNotification(pushSubscription, JSON.stringify(payload));
-      sent += 1;
-    } catch (error) {
-      const statusCode = typeof error === "object" && error && "statusCode" in error ? Number(error.statusCode) : null;
-      if (statusCode === 404 || statusCode === 410) {
-        await prisma.pushSubscription.deleteMany({ where: { endpoint: subscription.endpoint } });
-        removed += 1;
-        errors.push("Removed an expired push subscription. Enable push notifications again on this device.");
-      } else {
-        failed += 1;
-        errors.push(pushErrorMessage(error));
-      }
-    }
-  }));
-  return { configured: true, attempted: subscriptions.length, sent, removed, failed, errors: [...new Set(errors)].slice(0, 3) };
+  const result = await sendOneSignalPush([userId], payload);
+  return {
+    configured: true,
+    attempted: 1,
+    sent: result.sent ? 1 : 0,
+    removed: 0,
+    failed: result.sent ? 0 : 1,
+    errors: result.sent ? [] : [result.error ?? "OneSignal did not accept the push notification."]
+  };
 }
 
-function toWebPushSubscription(endpoint: string, keys: unknown): import("web-push").PushSubscription | null {
-  if (!isRecord(keys)) return null;
-  const p256dh = keys.p256dh;
-  const auth = keys.auth;
-  if (typeof p256dh !== "string" || typeof auth !== "string" || !p256dh || !auth) return null;
-  return { endpoint, keys: { p256dh, auth } };
+async function sendOneSignalPush(externalUserIds: string[], payload: PushPayload) {
+  if (!pushConfigured || externalUserIds.length === 0) return { sent: false, error: "OneSignal is not configured." };
+  const response = await fetch("https://api.onesignal.com/notifications?c=push", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Key ${env.ONESIGNAL_REST_API_KEY}`
+    },
+    body: JSON.stringify({
+      app_id: env.ONESIGNAL_APP_ID,
+      target_channel: "push",
+      include_aliases: { external_id: externalUserIds },
+      headings: { en: payload.title },
+      contents: { en: payload.body },
+      url: absoluteUrl(payload.url),
+      custom_data: { tag: payload.tag }
+    })
+  });
+  const body = await response.json().catch(() => null) as { id?: string; errors?: unknown; warnings?: unknown } | null;
+  if (!response.ok || !body?.id) {
+    return { sent: false, error: oneSignalErrorMessage(response.status, body) };
+  }
+  return { sent: true, id: body.id };
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+function absoluteUrl(url?: string) {
+  if (!url) return env.WEB_URL;
+  if (/^https?:\/\//i.test(url)) return url;
+  return `${env.WEB_URL.replace(/\/$/, "")}/${url.replace(/^\//, "")}`;
 }
 
-function pushErrorMessage(error: unknown) {
-  if (error instanceof Error && error.message) return error.message;
-  if (typeof error === "string" && error) return error;
-  return "Push provider rejected the notification.";
+function oneSignalErrorMessage(status: number, body: { errors?: unknown; warnings?: unknown } | null) {
+  const detail = body?.errors ?? body?.warnings;
+  if (typeof detail === "string") return `OneSignal error (${status}): ${detail}`;
+  if (detail) return `OneSignal error (${status}): ${JSON.stringify(detail)}`;
+  return `OneSignal error (${status}).`;
 }

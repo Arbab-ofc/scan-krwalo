@@ -44,11 +44,9 @@ services:
         sync: false
       - key: S3_SECRET_KEY
         sync: false
-      - key: PUSH_PUBLIC_KEY
+      - key: ONESIGNAL_APP_ID
         sync: false
-      - key: PUSH_PRIVATE_KEY
-        sync: false
-      - key: PUSH_SUBJECT
+      - key: ONESIGNAL_REST_API_KEY
         sync: false
       - key: TELEGRAM_BOT_TOKEN
         sync: false

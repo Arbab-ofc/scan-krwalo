@@ -22,7 +22,6 @@
     "dotenv-cli": "^8.0.0",
     "turbo": "^2.3.3",
     "typescript": "^5.7.2",
-    "vitest": "^2.1.8",
-    "web-push": "^3.6.7"
+    "vitest": "^2.1.8"
   }
 }

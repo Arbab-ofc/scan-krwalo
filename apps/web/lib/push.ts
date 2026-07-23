@@ -2,35 +2,65 @@
 
 import { api } from "./api";
 
+type PushConfig = {
+  enabled: boolean;
+  provider: "onesignal";
+  appId: string | null;
+};
+
+type OneSignalSdk = {
+  init(options: { appId: string; autoResubscribe?: boolean; notificationClickHandlerMatch?: string; notificationClickHandlerAction?: string }): Promise<void>;
+  login(externalId: string): Promise<void>;
+  Notifications: {
+    requestPermission(): Promise<boolean>;
+    isPushSupported(): boolean;
+    permission: boolean;
+  };
+  User: {
+    externalId: string | null;
+    addTag(key: string, value: string): void;
+    PushSubscription: {
+      id: string | null;
+      optedIn: boolean;
+      optIn(): Promise<void>;
+    };
+  };
+};
+
+declare global {
+  interface Window {
+    OneSignalDeferred?: Array<(oneSignal: OneSignalSdk) => void | Promise<void>>;
+  }
+}
+
+let initPromise: Promise<OneSignalSdk> | null = null;
+
 export async function enablePushNotifications() {
-  if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) {
+  if (typeof window === "undefined") throw new Error("Push notifications are not available during server rendering.");
+  const config = await api<PushConfig>("/push-subscriptions/public-key");
+  if (!config.enabled || !config.appId) {
+    throw new Error("OneSignal push notifications are not configured on the server.");
+  }
+  const me = await api<{ user: { id: string; role: string } }>("/auth/me");
+  const oneSignal = await initOneSignal(config.appId);
+  if (!oneSignal.Notifications.isPushSupported()) {
     throw new Error("Push notifications are not supported on this browser.");
   }
-  const config = await api<{ enabled: boolean; publicKey: string | null }>("/push-subscriptions/public-key");
-  if (!config.enabled || !config.publicKey) {
-    throw new Error("Push notifications are not configured on the server.");
-  }
-  const permission = await Notification.requestPermission();
-  if (permission !== "granted") throw new Error("Notification permission was not granted.");
-
-  await navigator.serviceWorker.register("/push-sw.js");
-  const registration = await navigator.serviceWorker.ready;
-  const applicationServerKey = urlBase64ToUint8Array(config.publicKey);
-  const existing = await registration.pushManager.getSubscription();
-  if (existing && !subscriptionUsesKey(existing, applicationServerKey)) {
-    await existing.unsubscribe();
-  }
-  const current = await registration.pushManager.getSubscription();
-  const subscription = current ?? await registration.pushManager.subscribe({
-    userVisibleOnly: true,
-    applicationServerKey
-  });
-
+  await oneSignal.login(me.user.id);
+  oneSignal.User.addTag("role", me.user.role);
+  const permission = oneSignal.Notifications.permission || await oneSignal.Notifications.requestPermission();
+  if (!permission) throw new Error("Notification permission was not granted.");
+  await oneSignal.User.PushSubscription.optIn();
   await api("/push-subscriptions", {
     method: "POST",
-    body: JSON.stringify(subscription.toJSON())
+    body: JSON.stringify({ provider: "onesignal" })
   });
-  return subscription;
+  return {
+    provider: "onesignal",
+    externalId: me.user.id,
+    subscriptionId: oneSignal.User.PushSubscription.id,
+    optedIn: oneSignal.User.PushSubscription.optedIn
+  };
 }
 
 export async function sendTestPushNotification() {
@@ -45,23 +75,33 @@ export function pushSupportStatus() {
   return Notification.permission;
 }
 
-function urlBase64ToUint8Array(value: string) {
-  const padding = "=".repeat((4 - (value.length % 4)) % 4);
-  const base64 = (value + padding).replace(/-/g, "+").replace(/_/g, "/");
-  const rawData = window.atob(base64);
-  return Uint8Array.from([...rawData].map((char) => char.charCodeAt(0)));
-}
-
-function subscriptionUsesKey(subscription: PushSubscription, applicationServerKey: Uint8Array) {
-  const existingKey = subscription.options.applicationServerKey;
-  if (!existingKey) return true;
-  return arrayBuffersEqual(existingKey, applicationServerKey.buffer);
-}
-
-function arrayBuffersEqual(left: ArrayBuffer | null, right: ArrayBufferLike) {
-  if (!left) return false;
-  const leftBytes = new Uint8Array(left);
-  const rightBytes = new Uint8Array(right);
-  if (leftBytes.byteLength !== rightBytes.byteLength) return false;
-  return leftBytes.every((byte, index) => byte === rightBytes[index]);
+function initOneSignal(appId: string) {
+  if (initPromise) return initPromise;
+  initPromise = new Promise<OneSignalSdk>((resolve, reject) => {
+    let settled = false;
+    window.OneSignalDeferred = window.OneSignalDeferred || [];
+    window.OneSignalDeferred.push(async (OneSignal) => {
+      try {
+        await OneSignal.init({
+          appId,
+          autoResubscribe: true,
+          notificationClickHandlerMatch: "origin",
+          notificationClickHandlerAction: "navigate"
+        });
+        settled = true;
+        resolve(OneSignal);
+      } catch (error) {
+        settled = true;
+        initPromise = null;
+        reject(error);
+      }
+    });
+    setTimeout(() => {
+      if (!settled) {
+        initPromise = null;
+        reject(new Error("OneSignal SDK did not load. Check ad blockers, network access, and that OneSignal is allowed on this domain."));
+      }
+    }, 10_000);
+  });
+  return initPromise;
 }
