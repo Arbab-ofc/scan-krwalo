@@ -62,8 +62,7 @@ const groups: Group[] = [
       ["GET", "/api/v1/tasks/:id", "Authenticated", "Fetch one task by ID."],
       ["POST", "/api/v1/tasks/:id/claim", "Scanner", "Atomically claim an available task."],
       ["POST", "/api/v1/tasks/:id/submit", "Scanner", "Submit task completion and optional proof file."],
-      ["POST", "/api/v1/tasks/:id/confirm", "Client", "Confirm scanner work and settle ledgers."],
-      ["POST", "/api/v1/tasks/:id/dispute", "Authenticated", "Dispute placeholder endpoint."],
+      ["POST", "/api/v1/tasks/:id/dispute", "Client", "Raise an issue within 5 minutes of scanner submission."],
       ["POST", "/api/v1/tasks/:id/cancel", "Authenticated", "Cancel placeholder endpoint."]
     ].map(endpoint)
   },
@@ -138,7 +137,7 @@ const groups: Group[] = [
       ["GET", "/api/v1/admin/reports/:report/export.csv", "Admin", "Export report CSV."],
       ["GET", "/api/v1/admin/reports/:report", "Admin", "Read named admin report."],
       ["GET", "/api/v1/admin/disputes", "Admin", "List disputes."],
-      ["POST", "/api/v1/admin/disputes/:id/resolve", "Admin", "Resolve dispute placeholder endpoint."],
+      ["POST", "/api/v1/admin/disputes/:id/resolve", "Admin", "Freeze, return client credit, or pay scanner."],
       ["GET", "/api/v1/admin/payouts", "Admin", "List payout requests."],
       ["POST", "/api/v1/admin/payouts/:id/processing", "Admin", "Move payout to processing."],
       ["POST", "/api/v1/admin/payouts/:id/paid", "Admin", "Mark payout paid."],

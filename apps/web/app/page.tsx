@@ -20,7 +20,7 @@ const rails: Array<[string, string, string]> = [
   ["02", "Scanners notified", "Online only"],
   ["03", "First grab wins", "Atomic claim"],
   ["04", "Proof submitted", "Timer locked"],
-  ["05", "Client confirms", "Wallet credited"]
+  ["05", "Issue window closes", "Wallet credited"]
 ];
 
 const roleRows: Array<[LucideIcon, string, string, string]> = [
@@ -33,7 +33,7 @@ const proofRows: Array<[LucideIcon, string, string]> = [
   [RadioTower, "Broadcast", "Eligible online scanners receive the new task automatically."],
   [Zap, "Claim", "A database transaction allows one scanner to win."],
   [FileCheck2, "Proof", "Scanner uploads evidence before the completion window closes."],
-  [CheckCircle2, "Settle", "Client confirmation credits the scanner exactly once."]
+  [CheckCircle2, "Settle", "The scanner is paid automatically unless the client raises an issue within 5 minutes."]
 ];
 
 export default function HomePage() {
@@ -109,7 +109,7 @@ export default function HomePage() {
                   <p className="text-xs font-semibold uppercase tracking-[.18em] text-slate-400">Settlement rule</p>
                   <div className="mt-5 space-y-3">
                     <RuleLine icon={<FileCheck2 size={17} />} text="Scanner done" />
-                    <RuleLine icon={<CheckCircle2 size={17} />} text="Client done" />
+                    <RuleLine icon={<CheckCircle2 size={17} />} text="5-minute issue window" />
                     <RuleLine icon={<WalletCards size={17} />} text="Scanner balance + reward" strong />
                   </div>
                 </div>

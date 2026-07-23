@@ -8,7 +8,7 @@ const defaults = {
   rewardCurrency: "USDT",
   taskClaimWindowSeconds: 120,
   taskCompletionWindowSeconds: 180,
-  clientReviewWindowSeconds: 900,
+  clientReviewWindowSeconds: 300,
   minimumPayoutAmount: "50",
   allowPartialPayout: true,
   telegramUsername: "ScanKrwaloAdmin",

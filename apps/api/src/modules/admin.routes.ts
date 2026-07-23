@@ -7,6 +7,7 @@ import { transitionPayout } from "../services/payouts.service.js";
 import { sendPushNotificationToUsers } from "../services/push.service.js";
 import { getPagination, paginated } from "../pagination.js";
 import { DomainError, minorUnitsToDisplay } from "@scan-krwalo/shared";
+import { resolveTaskDispute } from "../services/tasks.service.js";
 
 type AdminTaskQuery = {
   status?: string;
@@ -254,7 +255,12 @@ export async function registerAdminRoutes(app: FastifyInstance) {
     ]);
     return ok(reply, paginated(items, total, pagination));
   });
-  app.post("/disputes/:id/resolve", async (_, reply) => ok(reply, { resolved: true }));
+  app.post("/disputes/:id/resolve", async (request, reply) => {
+    const admin = await requireRole(request, ["ADMIN"]);
+    const params = request.params as { id: string };
+    const body = request.body as { resolution?: "FREEZE" | "REFUND_CLIENT" | "PAY_SCANNER" };
+    return ok(reply, await resolveTaskDispute(admin.id, params.id, body.resolution ?? "FREEZE"));
+  });
   app.get("/payouts", async (request, reply) => {
     await requireRole(request, ["ADMIN"]);
     const pagination = getPagination(request);

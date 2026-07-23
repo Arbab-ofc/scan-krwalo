@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
-import { CheckCircle2, ExternalLink, FileText, ImageIcon, RefreshCw, Search, Timer } from "lucide-react";
+import { AlertTriangle, ExternalLink, FileText, ImageIcon, RefreshCw, Search, Timer } from "lucide-react";
 import { AppShell } from "../../../components/shell";
 import { api, getToken } from "../../../lib/api";
 import { useLiveRefresh } from "../../../lib/live";
@@ -49,7 +49,9 @@ export default function ClientTasksPage() {
   const [page, setPage] = useState(1);
   const [query, setQuery] = useState("");
   const [message, setMessage] = useState("");
-  const [confirmingTaskId, setConfirmingTaskId] = useState<string | null>(null);
+  const [issueTaskId, setIssueTaskId] = useState<string | null>(null);
+  const [issueDescription, setIssueDescription] = useState("");
+  const [submittingIssue, setSubmittingIssue] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   const loadTasks = useCallback(async (nextPage = page) => {
@@ -68,21 +70,21 @@ export default function ClientTasksPage() {
     loadTasks(page);
   }, [page]);
 
-  async function markDone(task: ClientTask) {
-    if (confirmingTaskId) return;
+  async function raiseIssue(task: ClientTask) {
+    if (submittingIssue || issueDescription.trim().length < 5) return;
     setMessage("");
-    setConfirmingTaskId(task.id);
-    startTransition(async () => {
-      try {
-        await api(`/tasks/${task.id}/confirm`, { method: "POST", body: "{}" });
-        setMessage(`${task.publicId} marked as done.`);
-        await loadTasks(page);
-      } catch (error) {
-        setMessage(error instanceof Error ? error.message : "Could not mark task done.");
-      } finally {
-        setConfirmingTaskId(null);
-      }
-    });
+    setSubmittingIssue(true);
+    try {
+      await api(`/tasks/${task.id}/dispute`, { method: "POST", body: JSON.stringify({ reasonCode: "CLIENT_ISSUE", description: issueDescription.trim() }) });
+      setMessage(`${task.publicId} was sent to admin review.`);
+      setIssueTaskId(null);
+      setIssueDescription("");
+      await loadTasks(page);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not raise the issue.");
+    } finally {
+      setSubmittingIssue(false);
+    }
   }
 
   const tasks = useMemo(() => {
@@ -107,7 +109,7 @@ export default function ClientTasksPage() {
               <p className="app-eyebrow">Task tracking</p>
               <h1 className="app-title">My posted tasks</h1>
               <p className="app-copy">
-                Track every posted task, review scanner submissions, and mark completed work as done.
+                Track every posted task, review scanner submissions, and raise an issue within the 5-minute review window when needed.
               </p>
             </div>
             <button
@@ -166,14 +168,17 @@ export default function ClientTasksPage() {
                   <span className="break-safe">{timelineText(task)}</span>
                 </div>
                 {confirmableStatuses.has(task.status) ? (
-                  <button
-                    disabled={isPending || confirmingTaskId !== null}
-                    onClick={() => markDone(task)}
-                    className="app-button bg-accent px-5 py-3 text-white shadow-glow disabled:cursor-not-allowed disabled:opacity-70"
-                  >
-                    <CheckCircle2 size={18} />
-                    {confirmingTaskId === task.id ? "Marking..." : "Mark as Done"}
-                  </button>
+                  issueTaskId === task.id ? (
+                    <div className="w-full max-w-xl space-y-3">
+                      <textarea value={issueDescription} onChange={(event) => setIssueDescription(event.target.value)} rows={3} className="w-full rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm outline-none focus:ring-4 focus:ring-amber-100" placeholder="Describe the issue with the submitted work..." />
+                      <div className="flex flex-wrap justify-end gap-2">
+                        <button type="button" onClick={() => { setIssueTaskId(null); setIssueDescription(""); }} className="app-button border border-line bg-white text-ink">Cancel</button>
+                        <button type="button" disabled={submittingIssue || issueDescription.trim().length < 5} onClick={() => raiseIssue(task)} className="app-button bg-amber-600 text-white disabled:cursor-not-allowed disabled:opacity-60"><AlertTriangle size={17} />{submittingIssue ? "Sending..." : "Send to admin"}</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button type="button" disabled={isPending || submittingIssue} onClick={() => setIssueTaskId(task.id)} className="app-button border border-amber-300 bg-amber-50 px-5 py-3 text-amber-800 disabled:cursor-not-allowed disabled:opacity-70"><AlertTriangle size={18} />Raise an issue</button>
+                  )
                 ) : (
                   <span className="text-sm text-slate-400">{actionText(task.status)}</span>
                 )}
@@ -271,7 +276,7 @@ function formatDate(value: string | null) {
 function timelineText(task: ClientTask) {
   if (task.status === "AVAILABLE") return `Waiting for scanner. Grab window ends ${formatDate(task.claimExpiresAt)}.`;
   if (task.status === "CLAIMED") return `Scanner claimed this task ${formatDate(task.claimedAt)}.`;
-  if (task.status === "SCANNER_SUBMITTED") return "Scanner submitted proof. Review and mark as done.";
+  if (task.status === "SCANNER_SUBMITTED") return "Review the proof. You have 5 minutes to raise an issue; otherwise the scanner is paid automatically.";
   if (task.status === "COMPLETED" || task.status === "AUTO_COMPLETED") return `Completed ${formatDate(task.completedAt)}.`;
   return "Track this task status here.";
 }

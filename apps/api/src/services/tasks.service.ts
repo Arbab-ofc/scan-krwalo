@@ -27,6 +27,7 @@ type StoredTaskProof = {
 
 const UNCLAIMED_TASK_REFUND_SECONDS = 120;
 const SCANNER_COMPLETION_SECONDS = 180;
+const CLIENT_ISSUE_WINDOW_SECONDS = 300;
 
 function publicId() {
   return `TASK-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
@@ -173,7 +174,7 @@ export async function createTask(actorUserId: string, actorRole: "CLIENT" | "ADM
       claimExpiresAt,
       taskClaimWindowSeconds: UNCLAIMED_TASK_REFUND_SECONDS,
       taskCompletionWindowSeconds: SCANNER_COMPLETION_SECONDS,
-      clientReviewWindowSeconds: settings.clientReviewWindowSeconds
+      clientReviewWindowSeconds: CLIENT_ISSUE_WINDOW_SECONDS
     });
   });
   await publishTaskNotifications(result, claimExpiresAt);
@@ -213,7 +214,7 @@ export async function createBulkTasks(actorUserId: string, actorRole: "CLIENT" |
         claimExpiresAt,
         taskClaimWindowSeconds: UNCLAIMED_TASK_REFUND_SECONDS,
         taskCompletionWindowSeconds: SCANNER_COMPLETION_SECONDS,
-        clientReviewWindowSeconds: settings.clientReviewWindowSeconds
+        clientReviewWindowSeconds: CLIENT_ISSUE_WINDOW_SECONDS
       }));
     }
     return created;
@@ -404,34 +405,50 @@ async function settleCompletedTask(tx: Prisma.TransactionClient, taskId: string,
   return updated;
 }
 
-export async function confirmTask(userId: string, taskId: string) {
-  const updated = await prisma.$transaction(async (tx) => {
+export async function raiseTaskIssue(userId: string, taskId: string, input: unknown) {
+  const body = input && typeof input === "object" ? input as { reasonCode?: unknown; description?: unknown } : {};
+  const description = typeof body.description === "string" ? body.description.trim() : "";
+  if (description.length < 5 || description.length > 2000) {
+    throw new DomainError("TASK_INVALID_STATE", "Please describe the issue in 5 to 2000 characters.", 400);
+  }
+  const reasonCode = typeof body.reasonCode === "string" && body.reasonCode.trim() ? body.reasonCode.trim().slice(0, 80) : "CLIENT_ISSUE";
+  const result = await prisma.$transaction(async (tx) => {
     const task = await tx.task.findUnique({ where: { id: taskId }, include: { client: true } });
     if (!task?.client || task.client.userId !== userId) throw new DomainError("TASK_NOT_OWNED", "Task is not owned by this client.", 403);
-    if (task.status === "COMPLETED" || task.status === "AUTO_COMPLETED") return task;
-    if (task.status !== "SCANNER_SUBMITTED") throw new DomainError("TASK_INVALID_STATE", "Task cannot be confirmed now.", 409);
-    const update = await tx.task.updateMany({ where: { id: taskId, status: "SCANNER_SUBMITTED" }, data: { status: "CLIENT_CONFIRMED", clientConfirmedAt: new Date() } });
-    if (update.count !== 1) {
-      const latest = await tx.task.findUnique({ where: { id: taskId } });
-      if (latest?.status === "COMPLETED" || latest?.status === "AUTO_COMPLETED") return latest;
-      throw new DomainError("TASK_INVALID_STATE", "Task cannot be confirmed now.", 409);
+    if (task.status !== "SCANNER_SUBMITTED") throw new DomainError("TASK_INVALID_STATE", "An issue can only be raised while the task is awaiting review.", 409);
+    if (!task.scannerSubmittedAt || task.scannerSubmittedAt.getTime() + CLIENT_ISSUE_WINDOW_SECONDS * 1000 <= Date.now()) {
+      throw new DomainError("TASK_INVALID_STATE", "The 5-minute issue window has expired.", 409);
     }
-    return settleCompletedTask(tx, taskId, userId);
+    const updated = await tx.task.update({
+      where: { id: task.id },
+      data: { status: "DISPUTED", version: { increment: 1 } }
+    });
+    const dispute = await tx.taskDispute.create({
+      data: {
+        taskId: task.id,
+        openedByUserId: userId,
+        reasonCode,
+        description
+      }
+    });
+    await tx.taskEvent.create({ data: { taskId: task.id, eventType: "TASK_DISPUTED", previousStatus: "SCANNER_SUBMITTED", newStatus: "DISPUTED", actorUserId: userId, actorRole: "CLIENT", metadata: { reasonCode } } });
+    return { updated, dispute };
   }, { maxWait: 10_000, timeout: 20_000 });
-  const scannerUser = updated.assignedScannerId
-    ? await prisma.scannerProfile.findUnique({ where: { id: updated.assignedScannerId }, select: { userId: true } })
-    : null;
-  emitToUser(userId, "task:confirmed", { taskId: updated.id, status: updated.status });
-  emitToUser(userId, "credits:updated", { taskId: updated.id });
-  if (scannerUser) {
-    emitToUser(scannerUser.userId, "task:confirmed", { taskId: updated.id, status: updated.status });
-    emitToUser(scannerUser.userId, "wallet:updated", { taskId: updated.id });
+  if (result.updated.assignedScannerId) {
+    const scanner = await prisma.scannerProfile.findUnique({ where: { id: result.updated.assignedScannerId }, select: { userId: true } });
+    if (scanner) {
+      emitToUser(scanner.userId, "task:disputed", { taskId: result.updated.id, publicId: result.updated.publicId });
+      await prisma.notification.create({ data: { userId: scanner.userId, type: "TASK_DISPUTED", title: "Client raised an issue", message: `${result.updated.publicId} was sent to admin review.`, payload: { taskId: result.updated.id, disputeId: result.dispute.id } } });
+    }
   }
-  emitToRole("ADMIN", "task:updated", { taskId: updated.id, status: updated.status });
-  return updated;
+  emitToRole("ADMIN", "task:updated", { taskId: result.updated.id, status: result.updated.status });
+  emitToUser(userId, "task:disputed", { taskId: result.updated.id, publicId: result.updated.publicId });
+  return result;
 }
 
 export async function autoCompleteReview(taskId: string) {
+  const due = await prisma.task.findUnique({ where: { id: taskId }, select: { status: true, scannerSubmittedAt: true } });
+  if (!due || due.status !== "SCANNER_SUBMITTED" || !due.scannerSubmittedAt || due.scannerSubmittedAt.getTime() + CLIENT_ISSUE_WINDOW_SECONDS * 1000 > Date.now()) return null;
   const updated = await prisma.$transaction((tx) => settleCompletedTask(tx, taskId, "system", true));
   if (updated.clientId) {
     const client = await prisma.clientProfile.findUnique({ where: { id: updated.clientId }, select: { userId: true } });
@@ -443,6 +460,68 @@ export async function autoCompleteReview(taskId: string) {
   }
   emitToRole("ADMIN", "task:updated", { taskId: updated.id, status: updated.status });
   return updated;
+}
+
+export async function resolveTaskDispute(adminUserId: string, disputeId: string, resolution: "FREEZE" | "REFUND_CLIENT" | "PAY_SCANNER") {
+  if (!["FREEZE", "REFUND_CLIENT", "PAY_SCANNER"].includes(resolution)) throw new DomainError("TASK_INVALID_STATE", "Unknown dispute resolution.", 400);
+  const result = await prisma.$transaction(async (tx) => {
+    const dispute = await tx.taskDispute.findUnique({ where: { id: disputeId }, include: { task: { include: { client: { include: { creditAccount: true } } } } } });
+    if (!dispute) throw new DomainError("TASK_INVALID_STATE", "Dispute not found.", 404);
+    if (dispute.status === "RESOLVED_FOR_CLIENT" || dispute.status === "RESOLVED_FOR_SCANNER") throw new DomainError("TASK_INVALID_STATE", "This dispute is already resolved.", 409);
+    if (resolution === "FREEZE") {
+      return tx.taskDispute.update({ where: { id: dispute.id }, data: { status: "UNDER_REVIEW", adminResolution: "FROZEN", resolvedByAdminId: null, resolvedAt: null } });
+    }
+    if (resolution === "REFUND_CLIENT") {
+      const account = dispute.task.client?.creditAccount;
+      if (!account || !dispute.task.client) throw new DomainError("TASK_INVALID_STATE", "Client credit account is unavailable.", 409);
+      let ledgerCreated = true;
+      try {
+        await tx.clientCreditTransaction.create({
+          data: {
+            accountId: account.id,
+            clientId: dispute.task.client.id,
+            type: "TASK_REFUND",
+            direction: "CREDIT",
+            amount: 1,
+            availableBefore: account.availableCredits,
+            availableAfter: account.availableCredits + 1,
+            reservedBefore: account.reservedCredits,
+            reservedAfter: Math.max(0, account.reservedCredits - 1),
+            usedBefore: account.usedCredits,
+            usedAfter: account.usedCredits,
+            referenceType: "Task",
+            referenceId: dispute.task.id,
+            idempotencyKey: `task:${dispute.task.id}:credit:dispute-refund`,
+            description: "Reserved credit returned after client issue resolution",
+            createdByUserId: adminUserId
+          }
+        });
+      } catch (error) {
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") ledgerCreated = false;
+        else throw error;
+      }
+      if (ledgerCreated) {
+        await tx.clientCreditAccount.update({ where: { id: account.id }, data: { availableCredits: { increment: 1 }, reservedCredits: { decrement: 1 } } });
+        await tx.clientProfile.update({ where: { id: dispute.task.client.id }, data: { availableTaskCredits: { increment: 1 }, reservedTaskCredits: { decrement: 1 } } });
+      }
+      await tx.task.update({ where: { id: dispute.task.id }, data: { status: "REFUNDED", expiredAt: new Date(), version: { increment: 1 } } });
+      await tx.taskEvent.create({ data: { taskId: dispute.task.id, eventType: "TASK_REFUNDED", previousStatus: "DISPUTED", newStatus: "REFUNDED", actorUserId: adminUserId, actorRole: "ADMIN" } });
+      return tx.taskDispute.update({ where: { id: dispute.id }, data: { status: "RESOLVED_FOR_CLIENT", adminResolution: "REFUNDED_TO_CLIENT", resolvedByAdminId: adminUserId, resolvedAt: new Date() } });
+    }
+    await settleCompletedTask(tx, dispute.task.id, adminUserId);
+    return tx.taskDispute.update({ where: { id: dispute.id }, data: { status: "RESOLVED_FOR_SCANNER", adminResolution: "PAID_TO_SCANNER", resolvedByAdminId: adminUserId, resolvedAt: new Date() } });
+  }, { maxWait: 10_000, timeout: 20_000 });
+  const task = await prisma.task.findUnique({ where: { id: result.taskId }, select: { id: true, clientId: true, assignedScannerId: true, status: true } });
+  if (task?.clientId) {
+    const client = await prisma.clientProfile.findUnique({ where: { id: task.clientId }, select: { userId: true } });
+    if (client) emitToUser(client.userId, "credits:updated", { taskId: task.id });
+  }
+  if (task?.assignedScannerId) {
+    const scanner = await prisma.scannerProfile.findUnique({ where: { id: task.assignedScannerId }, select: { userId: true } });
+    if (scanner) emitToUser(scanner.userId, "wallet:updated", { taskId: task.id });
+  }
+  emitToRole("ADMIN", "task:updated", { taskId: result.taskId, status: task?.status });
+  return result;
 }
 
 export async function listTasks(userId: string, role: string, pagination: Pagination) {

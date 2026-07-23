@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { use, useCallback, useEffect, useState } from "react";
-import { ArrowLeft, ExternalLink, FileImage, RefreshCw } from "lucide-react";
+import { ArrowLeft, CreditCard, ExternalLink, FileImage, RefreshCw, ShieldAlert, WalletCards } from "lucide-react";
 import { AppShell } from "../../../../components/shell";
 import { api, getToken } from "../../../../lib/api";
 import { formatMoney } from "../../../../lib/money";
@@ -22,6 +22,7 @@ export default function AdminTaskDetailPage({ params }: { params: Promise<{ id: 
   const { id } = use(params);
   const [data, setData] = useState<any>(null);
   const [message, setMessage] = useState("");
+  const [resolving, setResolving] = useState(false);
 
   const load = useCallback(async () => {
     setMessage("");
@@ -35,6 +36,21 @@ export default function AdminTaskDetailPage({ params }: { params: Promise<{ id: 
   useEffect(() => {
     load().catch(console.error);
   }, [load]);
+
+  async function resolveDispute(resolution: "FREEZE" | "REFUND_CLIENT" | "PAY_SCANNER") {
+    if (!task?.dispute || resolving) return;
+    setResolving(true);
+    setMessage("");
+    try {
+      await api(`/admin/disputes/${task.dispute.id}/resolve`, { method: "POST", body: JSON.stringify({ resolution }) });
+      setMessage(resolution === "FREEZE" ? "Dispute frozen for review." : resolution === "REFUND_CLIENT" ? "Credit returned to the client." : "Reward paid to the scanner.");
+      await load();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not resolve dispute.");
+    } finally {
+      setResolving(false);
+    }
+  }
 
   const task = data?.task;
 
@@ -105,6 +121,11 @@ export default function AdminTaskDetailPage({ params }: { params: Promise<{ id: 
                     <Row label="Reason" value={task.dispute.reasonCode} />
                     <Row label="Description" value={task.dispute.description} />
                     <Row label="Resolution" value={task.dispute.adminResolution ?? "-"} />
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <button disabled={resolving || task.dispute.status === "UNDER_REVIEW"} onClick={() => resolveDispute("FREEZE")} className="inline-flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800 disabled:opacity-50"><ShieldAlert size={16} /> Freeze</button>
+                      <button disabled={resolving || task.dispute.status.startsWith("RESOLVED")} onClick={() => resolveDispute("REFUND_CLIENT")} className="inline-flex items-center gap-2 rounded-lg border border-line bg-white px-3 py-2 text-sm font-semibold text-ink disabled:opacity-50"><CreditCard size={16} /> Return credit</button>
+                      <button disabled={resolving || task.dispute.status.startsWith("RESOLVED")} onClick={() => resolveDispute("PAY_SCANNER")} className="inline-flex items-center gap-2 rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"><WalletCards size={16} /> Pay scanner</button>
+                    </div>
                   </div>
                 ) : <p className="text-sm text-slate-500">No dispute opened.</p>}
               </Panel>

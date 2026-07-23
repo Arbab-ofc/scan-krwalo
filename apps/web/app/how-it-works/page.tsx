@@ -23,7 +23,7 @@ const flow: Array<[string, string, string, LucideIcon]> = [
   ["02", "Scanners receive", "Online active scanners see the task and get realtime alerts.", RadioTower],
   ["03", "First claim wins", "One database transaction assigns the task to one scanner.", Zap],
   ["04", "Proof is uploaded", "The scanner submits evidence before the completion timer ends.", FileCheck2],
-  ["05", "Ledger settles", "Client confirmation consumes credit and releases scanner reward.", WalletCards]
+  ["05", "Issue window closes", "The scanner is paid automatically after 5 minutes unless the client raises an issue.", WalletCards]
 ];
 
 const roles: Array<[string, string, string, LucideIcon]> = [

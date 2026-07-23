@@ -6,7 +6,7 @@ import { extname, join } from "node:path";
 import { prisma } from "@scan-krwalo/database";
 import { authenticate, requireActivated, requireRole } from "../authz.js";
 import { ok } from "../http.js";
-import { claimTask, confirmTask, createBulkTasks, createTask, hideClientTaskReward, listTasks, submitTask } from "../services/tasks.service.js";
+import { claimTask, createBulkTasks, createTask, hideClientTaskReward, listTasks, raiseTaskIssue, submitTask } from "../services/tasks.service.js";
 import { DomainError } from "@scan-krwalo/shared";
 import { getPagination } from "../pagination.js";
 
@@ -89,12 +89,11 @@ export async function registerTaskRoutes(app: FastifyInstance) {
       checksum
     }));
   });
-  app.post("/:id/confirm", async (request, reply) => {
+  app.post("/:id/dispute", async (request, reply) => {
     const user = await requireRole(request, ["CLIENT"]);
     const params = request.params as { id: string };
-    return ok(reply, hideClientTaskReward(await confirmTask(user.id, params.id)));
+    return ok(reply, await raiseTaskIssue(user.id, params.id, request.body), 201);
   });
-  app.post("/:id/dispute", async (_, reply) => ok(reply, { created: true }));
   app.post("/:id/cancel", async (_, reply) => ok(reply, { cancelled: true }));
 }
 
