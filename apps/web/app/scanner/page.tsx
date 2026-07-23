@@ -103,9 +103,16 @@ function TelegramNotificationsCard() {
     setLoading(true);
     setMessage("");
     try {
-      await api("/scanner/telegram", { method: "DELETE" });
+      const result = await api<{
+        enabled: boolean;
+        username: string | null;
+        linked: boolean;
+        telegramUsername?: string | null;
+        linkedAt?: string | null;
+        unlinked: boolean;
+      }>("/scanner/telegram", { method: "DELETE" });
       setDeepLink(null);
-      await load();
+      setStatus(result);
       setMessage("Telegram alerts unlinked.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not unlink Telegram.");

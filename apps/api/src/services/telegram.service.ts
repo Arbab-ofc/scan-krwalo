@@ -77,7 +77,8 @@ export async function unlinkScannerTelegram(userId: string) {
       telegramLinkTokenCreatedAt: null
     }
   });
-  return { unlinked: true };
+  await recordTelegramWebhookEvent("unlinked", { scannerId: scanner.id, userId });
+  return { ...await getScannerTelegramStatus(userId), unlinked: true };
 }
 
 export async function handleTelegramWebhook(update: TelegramUpdate) {
