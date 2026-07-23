@@ -25,8 +25,7 @@ export async function notifyEligibleOnlineScannersForTask(taskId: string) {
   if (!task) return [];
   const scanners = await prisma.scannerProfile.findMany({
     where: {
-      status: "ACTIVE",
-      user: { role: "SCANNER", activationStatus: "ACTIVE", accountStatus: "ACTIVE" }
+      user: { role: "SCANNER" }
     },
     select: { userId: true, telegramChatId: true }
   });
