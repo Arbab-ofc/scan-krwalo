@@ -101,7 +101,7 @@ function initOneSignal(appId: string) {
         settled = true;
         resolve(OneSignal);
       } catch (error) {
-        if (isAlreadyInitializedError(error)) {
+        if (canReuseInitializedOneSignal(error, OneSignal)) {
           settled = true;
           resolve(OneSignal);
           return;
@@ -121,8 +121,10 @@ function initOneSignal(appId: string) {
   return initPromise;
 }
 
-function isAlreadyInitializedError(error: unknown) {
-  return error instanceof Error && /already initialized/i.test(error.message);
+function canReuseInitializedOneSignal(error: unknown, oneSignal: OneSignalSdk) {
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  const repeatedInitError = /already initialized|reading 'Qe'|reading "Qe"|undefined.*Qe/i.test(message);
+  return repeatedInitError || Boolean(oneSignal.Notifications || oneSignal.User || oneSignal.login);
 }
 
 function assertOneSignalReady(oneSignal: OneSignalSdk): asserts oneSignal is Required<OneSignalSdk> & { User: NonNullable<OneSignalSdk["User"]> & { PushSubscription: NonNullable<NonNullable<OneSignalSdk["User"]>["PushSubscription"]> } } {
