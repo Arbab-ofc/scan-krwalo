@@ -134,11 +134,11 @@ export default function AdminSettingsPage() {
         method: "POST",
         body: "{}"
       });
-      if (!result.configured) setMessage("OneSignal is not configured on the API server.");
-      else if (result.failed > 0) setMessage(`OneSignal test push attempted for ${result.attempted} users. Failed: ${result.failed}. ${result.errors[0] ?? ""}`);
-      else setMessage(`OneSignal test push sent to ${result.sent} users. Message IDs: ${result.messageIds.join(", ") || "none"}`);
+      if (!result.configured) setMessage("Firebase push is not configured on the API server.");
+      else if (result.failed > 0) setMessage(`Firebase test push attempted for ${result.attempted} users. Failed: ${result.failed}. ${result.errors[0] ?? ""}`);
+      else setMessage(`Firebase test push sent to ${result.sent} users. Message IDs: ${result.messageIds.join(", ") || "none"}`);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Could not send OneSignal test push.");
+      setMessage(error instanceof Error ? error.message : "Could not send Firebase test push.");
     } finally {
       setSendingTestPush(false);
     }
@@ -257,8 +257,8 @@ export default function AdminSettingsPage() {
             <div className="flex items-start gap-3">
               <span className="rounded-lg bg-white p-2 text-accent"><RadioTower size={19} /></span>
               <div>
-                <h2 className="font-semibold text-ink">OneSignal web push</h2>
-                <p className="mt-1 text-sm leading-6 text-slate-600">Send one test browser notification to every user with a OneSignal external ID subscription.</p>
+                <h2 className="font-semibold text-ink">Firebase web push</h2>
+                <p className="mt-1 text-sm leading-6 text-slate-600">Send one test browser notification to every user with a registered Firebase subscription.</p>
               </div>
             </div>
             <button type="button" onClick={sendTestPushToAllUsers} disabled={sendingTestPush} className="focus-ring mt-4 inline-flex w-full items-center justify-center gap-2 rounded-md border border-line bg-white px-5 py-3 font-semibold text-ink disabled:cursor-not-allowed disabled:opacity-70 sm:w-auto">

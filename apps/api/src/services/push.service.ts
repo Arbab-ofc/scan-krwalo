@@ -1,16 +1,30 @@
 import { env } from "../env.js";
 import { pushNotificationsQueue } from "../queues.js";
 import { getSettings } from "./settings.service.js";
+import { cert, getApps, initializeApp } from "firebase-admin/app";
+import { getMessaging } from "firebase-admin/messaging";
+import { prisma } from "@scan-krwalo/database";
 
 type PushPayload = { title: string; body: string; url?: string; tag?: string };
 
-const pushConfigured = Boolean(env.ONESIGNAL_APP_ID && env.ONESIGNAL_REST_API_KEY);
+const pushConfigured = Boolean(env.FIREBASE_PROJECT_ID && env.FIREBASE_CLIENT_EMAIL && env.FIREBASE_PRIVATE_KEY && env.FIREBASE_VAPID_PUBLIC_KEY);
+
+function firebaseMessaging() {
+  const app = getApps()[0] ?? initializeApp({
+    credential: cert({
+      projectId: env.FIREBASE_PROJECT_ID,
+      clientEmail: env.FIREBASE_CLIENT_EMAIL,
+      privateKey: env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, "\n")
+    })
+  });
+  return getMessaging(app);
+}
 
 export function getPushConfig() {
   return {
     enabled: pushConfigured,
-    provider: "onesignal",
-    appId: env.ONESIGNAL_APP_ID || null
+    provider: "firebase",
+    vapidKey: env.FIREBASE_VAPID_PUBLIC_KEY || null
   };
 }
 
@@ -34,65 +48,66 @@ export async function enqueuePushNotification(userId: string, payload: PushPaylo
 }
 
 export async function sendQueuedPushNotification(userId: string, payload: PushPayload) {
-  await sendOneSignalPush([userId], payload);
+  await sendFirebasePush([userId], payload);
 }
 
 export async function sendPushNotificationNow(userId: string, payload: PushPayload) {
   if (!pushConfigured) return { configured: false, attempted: 0, sent: 0, removed: 0, failed: 0, errors: [] as string[] };
-  const result = await sendOneSignalPush([userId], payload);
+  const result = await sendFirebasePush([userId], payload);
   return {
     configured: true,
     attempted: 1,
     sent: result.sent ? 1 : 0,
     removed: 0,
     failed: result.sent ? 0 : 1,
-    errors: result.sent ? [] : [result.error ?? "OneSignal did not accept the push notification."],
-    provider: "onesignal",
-    messageId: result.id ?? null,
-    warnings: result.warnings ?? null
+    errors: result.sent ? [] : [result.error ?? "Firebase did not accept the push notification."],
+    provider: "firebase",
+    messageId: result.id ?? null
   };
 }
 
 export async function sendPushNotificationToUsers(userIds: string[], payload: PushPayload) {
   if (!pushConfigured) return { configured: false, attempted: userIds.length, sent: 0, failed: 0, errors: [] as string[], messageIds: [] as string[] };
-  const batches = chunk(userIds, 20_000);
-  const results = await Promise.all(batches.map((batch) => sendOneSignalPush(batch, payload)));
-  const sent = results.reduce((total, result, index) => total + (result.sent ? (batches[index]?.length ?? 0) : 0), 0);
-  const failed = results.reduce((total, result, index) => total + (!result.sent ? (batches[index]?.length ?? 0) : 0), 0);
+  const batches = chunk(userIds, 500);
+  const results = await Promise.all(batches.map((batch) => sendFirebasePush(batch, payload)));
+  const sent = results.reduce((total, result) => total + result.delivered, 0);
+  const failed = Math.max(0, results.reduce((total, result) => total + result.attempted, 0) - sent);
   return {
     configured: true,
     attempted: userIds.length,
     sent,
     failed,
-    errors: results.filter((result) => !result.sent).map((result) => result.error ?? "OneSignal did not accept the push notification.").slice(0, 5),
-    messageIds: results.map((result) => result.id).filter((id): id is string => Boolean(id)),
-    warnings: results.map((result) => result.warnings).filter(Boolean)
+    errors: results.filter((result) => !result.sent).map((result) => result.error ?? "Firebase did not accept the push notification.").slice(0, 5),
+    messageIds: results.map((result) => result.id).filter((id): id is string => Boolean(id))
   };
 }
 
-async function sendOneSignalPush(externalUserIds: string[], payload: PushPayload) {
-  if (!pushConfigured || externalUserIds.length === 0) return { sent: false, error: "OneSignal is not configured." };
-  const response = await fetch("https://api.onesignal.com/notifications?c=push", {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      authorization: `Key ${env.ONESIGNAL_REST_API_KEY}`
-    },
-    body: JSON.stringify({
-      app_id: env.ONESIGNAL_APP_ID,
-      target_channel: "push",
-      include_aliases: { external_id: externalUserIds },
-      headings: { en: payload.title },
-      contents: { en: payload.body },
-      url: absoluteUrl(payload.url),
-      custom_data: { tag: payload.tag }
-    })
+async function sendFirebasePush(userIds: string[], payload: PushPayload) {
+  if (!pushConfigured || userIds.length === 0) return { sent: false, delivered: 0, attempted: 0, error: "Firebase push is not configured." };
+  const subscriptions = await prisma.pushSubscription.findMany({
+    where: { userId: { in: userIds } },
+    select: { id: true, endpoint: true }
   });
-  const body = await response.json().catch(() => null) as { id?: string; errors?: unknown; warnings?: unknown } | null;
-  if (!response.ok || !body?.id) {
-    return { sent: false, error: oneSignalErrorMessage(response.status, body) };
-  }
-  return { sent: true, id: body.id, warnings: body.warnings };
+  if (subscriptions.length === 0) return { sent: false, delivered: 0, attempted: 0, error: "No Firebase browser subscriptions are registered." };
+  const tokenBatches = chunk(subscriptions, 500);
+  const responses = await Promise.all(tokenBatches.map((batch) => firebaseMessaging().sendEachForMulticast({
+    tokens: batch.map((subscription) => subscription.endpoint),
+    notification: { title: payload.title, body: payload.body },
+    data: { url: absoluteUrl(payload.url), tag: payload.tag ?? "scan-krwalo" },
+    webpush: { fcmOptions: { link: absoluteUrl(payload.url) } }
+  })));
+  const invalidIds = responses.flatMap((response, batchIndex) => response.responses
+    .map((result, index) => {
+      const id = tokenBatches[batchIndex]?.[index]?.id;
+      const code = result.error?.code;
+      return id && (code === "messaging/registration-token-not-registered" || code === "messaging/invalid-registration-token") ? id : null;
+    }))
+    .filter((id): id is string => Boolean(id));
+  if (invalidIds.length > 0) await prisma.pushSubscription.deleteMany({ where: { id: { in: invalidIds } } });
+  const delivered = responses.reduce((total, response) => total + response.successCount, 0);
+  const firstError = responses.flatMap((response) => response.responses).find((result) => !result.success)?.error?.message;
+  if (delivered === 0) return { sent: false, delivered: 0, attempted: subscriptions.length, error: firstError ?? "Firebase did not deliver the push notification." };
+  return { sent: true, delivered, attempted: subscriptions.length, id: `firebase:${Date.now()}` };
 }
 
 function chunk<T>(items: T[], size: number) {
@@ -105,11 +120,4 @@ function absoluteUrl(url?: string) {
   if (!url) return env.WEB_URL;
   if (/^https?:\/\//i.test(url)) return url;
   return `${env.WEB_URL.replace(/\/$/, "")}/${url.replace(/^\//, "")}`;
-}
-
-function oneSignalErrorMessage(status: number, body: { errors?: unknown; warnings?: unknown } | null) {
-  const detail = body?.errors ?? body?.warnings;
-  if (typeof detail === "string") return `OneSignal error (${status}): ${detail}`;
-  if (detail) return `OneSignal error (${status}): ${JSON.stringify(detail)}`;
-  return `OneSignal error (${status}).`;
 }

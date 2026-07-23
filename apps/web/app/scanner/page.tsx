@@ -220,7 +220,7 @@ function PushNotificationsCard() {
     try {
       const result = await enablePushNotifications();
       setStatus(pushSupportStatus());
-      setMessage(`Push notifications enabled for this device. OneSignal subscription: ${result.subscriptionId}`);
+      setMessage(`Push notifications enabled for this device. Firebase subscription: ${result.subscriptionId}`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not enable push notifications.");
     }
@@ -235,7 +235,7 @@ function PushNotificationsCard() {
       if (!result.configured) {
         setMessage("Push notifications are not configured on the server.");
       } else if (result.sent > 0) {
-        setMessage(`OneSignal accepted the test push${result.messageId ? ` (${result.messageId})` : ""}.${result.warnings ? ` Warning: ${JSON.stringify(result.warnings)}` : ""}`);
+        setMessage(`Firebase accepted the test push${result.messageId ? ` (${result.messageId})` : ""}.`);
       } else if (result.attempted === 0) {
         setMessage("No push subscription is saved for this account. Refresh the subscription first.");
       } else if (result.errors?.length) {

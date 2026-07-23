@@ -58,7 +58,7 @@ export async function registerAdminRoutes(app: FastifyInstance) {
     const users = await prisma.user.findMany({ select: { id: true } });
     const result = await sendPushNotificationToUsers(users.map((user) => user.id), {
       title: "Scan Krwalo test",
-      body: "This is a platform-wide OneSignal test notification.",
+      body: "This is a platform-wide Firebase test notification.",
       url: "/notifications",
       tag: "admin-test-push"
     });
