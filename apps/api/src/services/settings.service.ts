@@ -13,6 +13,9 @@ const defaults = {
   allowPartialPayout: true,
   telegramUsername: "ScanKrwaloAdmin",
   telegramContactEnabled: true,
+  telegramBotToken: "",
+  telegramBotUsername: "",
+  telegramWebhookSecret: "",
   scannerCooldownSeconds: 0,
   maxActiveTasksPerScanner: 1,
   proofRequired: false,
@@ -23,6 +26,10 @@ const defaults = {
 };
 
 export type Settings = typeof defaults;
+export type AdminSettings = Omit<Settings, "telegramBotToken"> & {
+  telegramBotToken: "";
+  telegramBotTokenConfigured: boolean;
+};
 
 export async function getSettings(): Promise<Settings> {
   const rows = await prisma.systemSetting.findMany();
@@ -30,11 +37,24 @@ export async function getSettings(): Promise<Settings> {
   return { ...defaults, ...values } as Settings;
 }
 
+export async function getAdminSettings(): Promise<AdminSettings> {
+  const settings = await getSettings();
+  return {
+    ...settings,
+    telegramBotToken: "",
+    telegramBotTokenConfigured: Boolean(settings.telegramBotToken || process.env.TELEGRAM_BOT_TOKEN)
+  };
+}
+
 export async function updateSettings(input: Record<string, unknown>, actorUserId: string) {
   const normalized: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(input)) {
     if (!(key in defaults)) continue;
-    if (key === "telegramUsername") normalized[key] = normalizeTelegramUsername(String(value));
+    if (key === "telegramBotToken" && !String(value).trim()) continue;
+    if (key === "telegramUsername" || key === "telegramBotUsername") {
+      const text = String(value).trim();
+      normalized[key] = text ? normalizeTelegramUsername(text) : "";
+    }
     else if (key === "defaultScannerReward" || key === "minimumPayoutAmount") normalized[key] = displayToMinorUnits(String(value)).toString();
     else normalized[key] = value;
   }
@@ -57,5 +77,5 @@ export async function updateSettings(input: Record<string, unknown>, actorUserId
       });
     }
   });
-  return getSettings();
+  return getAdminSettings();
 }

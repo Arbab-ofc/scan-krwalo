@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Save } from "lucide-react";
+import { RadioTower, Save } from "lucide-react";
 import { AppShell } from "../../../components/shell";
 import { api } from "../../../lib/api";
 import { minorUnitsToDisplay } from "../../../lib/money";
@@ -11,14 +11,34 @@ type Settings = {
   rewardCurrency: string;
   minimumPayoutAmount: string;
   telegramUsername: string;
+  telegramBotUsername: string;
+  telegramBotToken: "";
+  telegramBotTokenConfigured: boolean;
+  telegramWebhookSecret: string;
 };
 
 export default function AdminSettingsPage() {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [reward, setReward] = useState("");
   const [telegramUsername, setTelegramUsername] = useState("");
+  const [telegramBotUsername, setTelegramBotUsername] = useState("");
+  const [telegramBotToken, setTelegramBotToken] = useState("");
+  const [telegramWebhookSecret, setTelegramWebhookSecret] = useState("");
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
+  const [installingWebhook, setInstallingWebhook] = useState(false);
+
+  function settingsPayload() {
+    const payload: Record<string, string> = {
+      defaultScannerReward: reward,
+      rewardCurrency: "USDT",
+      telegramUsername,
+      telegramBotUsername,
+      telegramWebhookSecret
+    };
+    if (telegramBotToken.trim()) payload.telegramBotToken = telegramBotToken.trim();
+    return payload;
+  }
 
   useEffect(() => {
     api<Settings>("/admin/settings")
@@ -26,6 +46,8 @@ export default function AdminSettingsPage() {
         setSettings(data);
         setReward(minorUnitsToDisplay(data.defaultScannerReward));
         setTelegramUsername(data.telegramUsername ?? "");
+        setTelegramBotUsername(data.telegramBotUsername ?? "");
+        setTelegramWebhookSecret(data.telegramWebhookSecret ?? "");
       })
       .catch((error) => setMessage(error instanceof Error ? error.message : "Could not load settings."));
   }, []);
@@ -37,15 +59,14 @@ export default function AdminSettingsPage() {
     try {
       const updated = await api<Settings>("/admin/settings", {
         method: "PATCH",
-        body: JSON.stringify({
-          defaultScannerReward: reward,
-          rewardCurrency: "USDT",
-          telegramUsername
-        })
+        body: JSON.stringify(settingsPayload())
       });
       setSettings(updated);
       setReward(minorUnitsToDisplay(updated.defaultScannerReward));
       setTelegramUsername(updated.telegramUsername ?? "");
+      setTelegramBotUsername(updated.telegramBotUsername ?? "");
+      setTelegramBotToken("");
+      setTelegramWebhookSecret(updated.telegramWebhookSecret ?? "");
       setMessage("Settings updated.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Update failed.");
@@ -54,11 +75,34 @@ export default function AdminSettingsPage() {
     }
   }
 
+  async function installWebhook() {
+    setInstallingWebhook(true);
+    setMessage("");
+    try {
+      const result = await api<{ webhookUrl: string }>("/admin/telegram/webhook", {
+        method: "POST",
+        body: JSON.stringify(settingsPayload())
+      });
+      const updated = await api<Settings>("/admin/settings");
+      setSettings(updated);
+      setReward(minorUnitsToDisplay(updated.defaultScannerReward));
+      setTelegramUsername(updated.telegramUsername ?? "");
+      setTelegramBotUsername(updated.telegramBotUsername ?? "");
+      setTelegramBotToken("");
+      setTelegramWebhookSecret(updated.telegramWebhookSecret ?? "");
+      setMessage(`Telegram webhook installed: ${result.webhookUrl}`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not install Telegram webhook.");
+    } finally {
+      setInstallingWebhook(false);
+    }
+  }
+
   return (
     <AppShell role="admin">
       <section className="rounded-2xl border border-line bg-white p-5 shadow-sm sm:p-6">
         <p className="text-sm font-semibold uppercase tracking-[.18em] text-accent">Platform settings</p>
-        <h1 className="mt-2 text-3xl font-semibold tracking-tight text-ink">Rewards and contact</h1>
+        <h1 className="mt-2 text-3xl font-semibold tracking-tight text-ink">Rewards, contact, and Telegram bot</h1>
         <p className="mt-2 text-sm leading-6 text-slate-600">
           Scanner reward is stored in minor units and snapshotted onto every new task. Existing task rewards do not change.
         </p>
@@ -75,7 +119,7 @@ export default function AdminSettingsPage() {
             />
           </label>
           <label className="grid gap-2 text-sm font-semibold text-ink">
-            Telegram username
+            Support Telegram username
             <input
               value={telegramUsername}
               onChange={(event) => setTelegramUsername(event.target.value)}
@@ -83,6 +127,52 @@ export default function AdminSettingsPage() {
               placeholder="ScanKrwaloAdmin"
             />
           </label>
+          <div className="mt-2 rounded-xl border border-line bg-slate-50 p-4">
+            <div className="flex items-start gap-3">
+              <span className="rounded-lg bg-white p-2 text-accent"><RadioTower size={19} /></span>
+              <div>
+                <h2 className="font-semibold text-ink">Scanner Telegram bot alerts</h2>
+                <p className="mt-1 text-sm leading-6 text-slate-600">Save bot credentials here or provide them through environment variables. The token is never returned by the API.</p>
+              </div>
+            </div>
+            <div className="mt-4 grid gap-4">
+              <label className="grid gap-2 text-sm font-semibold text-ink">
+                Bot username
+                <input
+                  value={telegramBotUsername}
+                  onChange={(event) => setTelegramBotUsername(event.target.value)}
+                  className="rounded-md border border-line bg-white px-4 py-3 font-normal"
+                  placeholder="YourBotUsername"
+                />
+              </label>
+              <label className="grid gap-2 text-sm font-semibold text-ink">
+                Bot token {settings?.telegramBotTokenConfigured ? "(configured)" : ""}
+                <input
+                  value={telegramBotToken}
+                  onChange={(event) => setTelegramBotToken(event.target.value)}
+                  className="rounded-md border border-line bg-white px-4 py-3 font-normal"
+                  placeholder={settings?.telegramBotTokenConfigured ? "Enter only to replace existing token" : "123456789:AA..."}
+                  type="password"
+                  autoComplete="off"
+                />
+              </label>
+              <label className="grid gap-2 text-sm font-semibold text-ink">
+                Webhook secret
+                <input
+                  value={telegramWebhookSecret}
+                  onChange={(event) => setTelegramWebhookSecret(event.target.value)}
+                  className="rounded-md border border-line bg-white px-4 py-3 font-normal"
+                  placeholder="optional-random-secret"
+                  type="password"
+                  autoComplete="off"
+                />
+              </label>
+              <button type="button" onClick={installWebhook} disabled={installingWebhook} className="focus-ring inline-flex items-center justify-center gap-2 rounded-md border border-line bg-white px-5 py-3 font-semibold text-ink disabled:cursor-not-allowed disabled:opacity-70">
+                <RadioTower size={18} />
+                {installingWebhook ? "Installing..." : "Install Telegram webhook"}
+              </button>
+            </div>
+          </div>
           <button disabled={saving} className="focus-ring inline-flex items-center justify-center gap-2 rounded-md bg-accent px-5 py-3 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-70">
             <Save size={18} />
             {saving ? "Saving..." : "Save settings"}

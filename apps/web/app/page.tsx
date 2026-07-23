@@ -69,19 +69,19 @@ export default function HomePage() {
 
           <div className="relative pb-8 lg:pb-0">
             <div className="relative overflow-hidden border border-ink/10 bg-white shadow-2xl shadow-slate-950/10">
-              <div className="grid grid-cols-[96px_1fr] border-b border-line">
-                <div className="grid place-items-center border-r border-line bg-ink py-5 text-sm font-semibold uppercase tracking-[.18em] text-white [writing-mode:vertical-rl]">
+              <div className="grid grid-cols-[64px_minmax(0,1fr)] border-b border-line sm:grid-cols-[96px_minmax(0,1fr)]">
+                <div className="grid place-items-center border-r border-line bg-ink py-5 text-xs font-semibold uppercase tracking-[.16em] text-white [writing-mode:vertical-rl] sm:text-sm sm:tracking-[.18em]">
                   Dispatch
                 </div>
-                <div className="p-5">
+                <div className="min-w-0 p-4 sm:p-5">
                   <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
-                    <div>
+                    <div className="min-w-0">
                       <p className="text-xs font-semibold uppercase tracking-[.18em] text-slate-400">Role activation</p>
-                      <p className="mt-2 text-3xl font-semibold tracking-tight text-ink">SCN &amp; CLI control board</p>
+                      <p className="mt-2 text-2xl font-semibold tracking-tight text-ink sm:text-3xl">SCN &amp; CLI control board</p>
                     </div>
-                    <div className="grid grid-cols-2 gap-2 font-mono text-xs">
-                      <span className="border border-line bg-slate-50 px-3 py-2">SCN583920174</span>
-                      <span className="border border-line bg-slate-50 px-3 py-2">CLI739284610</span>
+                    <div className="grid w-full min-w-0 grid-cols-[repeat(auto-fit,minmax(8.5rem,1fr))] gap-2 font-mono text-[11px] sm:w-auto sm:min-w-[18rem] sm:text-xs">
+                      <span className="min-w-0 break-all border border-line bg-slate-50 px-3 py-2 text-center">SCN583920174</span>
+                      <span className="min-w-0 break-all border border-line bg-slate-50 px-3 py-2 text-center">CLI739284610</span>
                     </div>
                   </div>
                 </div>

@@ -76,38 +76,39 @@ export default function LiveTasksPage() {
 
   return (
     <AppShell role="scanner">
-      <div className="flex flex-col gap-6">
-        <section className="rounded-2xl border border-line bg-white p-5 shadow-sm sm:p-6">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="text-sm font-semibold uppercase tracking-[.18em] text-accent">Scanner feed</p>
-              <h1 className="mt-2 text-3xl font-semibold tracking-tight text-ink">Live tasks</h1>
-              <p className="mt-2 text-sm leading-6 text-slate-600">
+      <div className="app-page">
+        <section className="app-card">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="min-w-0">
+              <p className="app-eyebrow">Scanner feed</p>
+              <h1 className="app-title">Live tasks</h1>
+              <p className="app-copy">
                 Only tasks still inside the grab window appear here. The feed refreshes automatically every 5 seconds.
               </p>
             </div>
-            <button
-              onClick={() => startTransition(loadTasks)}
-              disabled={isPending}
-              className="focus-ring inline-flex items-center justify-center gap-2 rounded-lg border border-line bg-white px-4 py-2 text-sm font-semibold text-ink shadow-sm disabled:opacity-60"
-            >
-              <RefreshCw size={16} className={isPending ? "animate-spin" : ""} />
-              Refresh
-            </button>
-            <button
-              disabled={pushStatus === "granted"}
-              onClick={async () => {
-                try {
-                  await enablePushNotifications();
-                  setPushStatus(pushSupportStatus());
-                } catch (error) {
-                  setMessage(error instanceof Error ? error.message : "Could not enable notifications.");
-                }
-              }}
-              className="focus-ring inline-flex items-center justify-center rounded-lg border border-line bg-white px-4 py-2 text-sm font-semibold text-ink shadow-sm disabled:opacity-60"
-            >
-              {pushStatus === "granted" ? "Push enabled" : "Enable push"}
-            </button>
+            <div className="app-actions">
+              <button
+                onClick={() => startTransition(loadTasks)}
+                disabled={isPending}
+                className="app-button border border-line bg-white text-ink shadow-sm disabled:opacity-60"
+              >
+                <RefreshCw size={16} className={isPending ? "animate-spin" : ""} />
+                Refresh
+              </button>
+              <button
+                onClick={async () => {
+                  try {
+                    await enablePushNotifications();
+                    setPushStatus(pushSupportStatus());
+                  } catch (error) {
+                    setMessage(error instanceof Error ? error.message : "Could not enable notifications.");
+                  }
+                }}
+                className="app-button border border-line bg-white text-ink shadow-sm"
+              >
+                {pushStatus === "granted" ? "Refresh push" : "Enable push"}
+              </button>
+            </div>
           </div>
           {lastUpdated && <p className="mt-4 text-xs text-slate-500">Last checked {formatTime(lastUpdated)}</p>}
           {message && <p className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{message}</p>}
@@ -115,28 +116,28 @@ export default function LiveTasksPage() {
 
         <div className="grid gap-4">
           {visibleTasks.map((task) => (
-            <article key={task.id} className="rounded-2xl border border-line bg-white p-5 shadow-sm">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                <div>
+            <article key={task.id} className="app-card-compact">
+              <div className="grid min-w-0 gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-start">
+                <div className="min-w-0">
                   <p className="text-sm font-medium text-slate-500">{task.publicId}</p>
-                  <h2 className="mt-1 text-xl font-semibold text-ink">{task.title || task.normalizedUrl}</h2>
-                  <p className="mt-2 max-w-2xl truncate text-sm text-slate-500">{task.normalizedUrl}</p>
+                  <h2 className="break-safe mt-1 text-lg font-semibold text-ink sm:text-xl">{task.title || task.normalizedUrl}</h2>
+                  <p className="break-safe mt-2 text-sm text-slate-500">{task.normalizedUrl}</p>
                 </div>
-                <div className="rounded-xl bg-emerald-50 px-4 py-3 text-right">
+                <div className="w-full rounded-xl bg-emerald-50 px-4 py-3 text-left md:w-auto md:text-right">
                   <p className="text-xs font-semibold uppercase tracking-[.14em] text-emerald-700">Reward</p>
                   <p className="mt-1 text-lg font-semibold text-accent">{formatMoney(task.rewardAmount, task.rewardCurrency)}</p>
                 </div>
               </div>
 
               <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="inline-flex items-center gap-2 text-sm font-medium text-slate-600">
-                  <Timer size={17} className="text-accent" />
-                  Grab window: {remainingTime(task.claimExpiresAt, now)}
+                <div className="flex items-center gap-2 text-sm font-medium text-slate-600">
+                  <Timer size={17} className="shrink-0 text-accent" />
+                  <span>Grab window: {remainingTime(task.claimExpiresAt, now)}</span>
                 </div>
                 <button
                   disabled={claimingTaskId !== null}
                   onClick={() => claim(task.id)}
-                  className="focus-ring inline-flex min-h-12 items-center justify-center gap-2 rounded-lg bg-accent px-5 py-3 text-base font-semibold text-white shadow-glow disabled:cursor-not-allowed disabled:opacity-70"
+                  className="app-button min-h-12 bg-accent px-5 py-3 text-base text-white shadow-glow disabled:cursor-not-allowed disabled:opacity-70"
                 >
                   <Zap size={18} />
                   {claimingTaskId === task.id ? "Grabbing..." : "Grab Task"}

@@ -15,10 +15,15 @@ export async function enablePushNotifications() {
 
   await navigator.serviceWorker.register("/push-sw.js");
   const registration = await navigator.serviceWorker.ready;
+  const applicationServerKey = urlBase64ToUint8Array(config.publicKey);
   const existing = await registration.pushManager.getSubscription();
-  const subscription = existing ?? await registration.pushManager.subscribe({
+  if (existing && !subscriptionUsesKey(existing, applicationServerKey)) {
+    await existing.unsubscribe();
+  }
+  const current = await registration.pushManager.getSubscription();
+  const subscription = current ?? await registration.pushManager.subscribe({
     userVisibleOnly: true,
-    applicationServerKey: urlBase64ToUint8Array(config.publicKey)
+    applicationServerKey
   });
 
   await api("/push-subscriptions", {
@@ -26,6 +31,12 @@ export async function enablePushNotifications() {
     body: JSON.stringify(subscription.toJSON())
   });
   return subscription;
+}
+
+export async function sendTestPushNotification() {
+  return api<{ configured: boolean; attempted: number; sent: number; removed: number }>("/push-subscriptions/test", {
+    method: "POST"
+  });
 }
 
 export function pushSupportStatus() {
@@ -39,4 +50,18 @@ function urlBase64ToUint8Array(value: string) {
   const base64 = (value + padding).replace(/-/g, "+").replace(/_/g, "/");
   const rawData = window.atob(base64);
   return Uint8Array.from([...rawData].map((char) => char.charCodeAt(0)));
+}
+
+function subscriptionUsesKey(subscription: PushSubscription, applicationServerKey: Uint8Array) {
+  const existingKey = subscription.options.applicationServerKey;
+  if (!existingKey) return true;
+  return arrayBuffersEqual(existingKey, applicationServerKey.buffer);
+}
+
+function arrayBuffersEqual(left: ArrayBuffer | null, right: ArrayBufferLike) {
+  if (!left) return false;
+  const leftBytes = new Uint8Array(left);
+  const rightBytes = new Uint8Array(right);
+  if (leftBytes.byteLength !== rightBytes.byteLength) return false;
+  return leftBytes.every((byte, index) => byte === rightBytes[index]);
 }

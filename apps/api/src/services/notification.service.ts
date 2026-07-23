@@ -1,6 +1,7 @@
 import { prisma, type NotificationType } from "@scan-krwalo/database";
 import { enqueuePushNotification } from "./push.service.js";
 import { scannerOnlineSince } from "./presence.service.js";
+import { sendTaskTelegramNotification } from "./telegram.service.js";
 
 export async function notifyUser(input: {
   userId: string;
@@ -31,7 +32,7 @@ export async function notifyEligibleOnlineScannersForTask(taskId: string) {
       user: { role: "SCANNER", activationStatus: "ACTIVE", accountStatus: "ACTIVE" },
       assignedTasks: { none: { status: { in: ["CLAIMED", "SCANNER_SUBMITTED", "DISPUTED"] } } }
     },
-    select: { userId: true }
+    select: { userId: true, telegramChatId: true }
   });
   if (scanners.length === 0) return [];
   const result = await prisma.notification.createMany({
@@ -47,7 +48,24 @@ export async function notifyEligibleOnlineScannersForTask(taskId: string) {
     title: "New task available",
     body: `${task.publicId} is ready to grab.`,
     url: "/scanner/live-tasks",
-    tag: `task:${task.id}`
-  })));
+      tag: `task:${task.id}`
+    })));
+  const telegramScanners = await prisma.scannerProfile.findMany({
+    where: {
+      status: "ACTIVE",
+      telegramChatId: { not: null },
+      user: { role: "SCANNER", activationStatus: "ACTIVE", accountStatus: "ACTIVE" },
+      assignedTasks: { none: { status: { in: ["CLAIMED", "SCANNER_SUBMITTED", "DISPUTED"] } } }
+    },
+    select: { userId: true, telegramChatId: true }
+  });
+  await Promise.all(telegramScanners
+    .filter((scanner): scanner is { userId: string; telegramChatId: string } => Boolean(scanner.telegramChatId))
+    .map((scanner) => sendTaskTelegramNotification({
+      chatId: scanner.telegramChatId,
+      publicId: task.publicId,
+      title: task.title,
+      normalizedUrl: task.normalizedUrl
+    }).catch((error) => console.error("Failed to send Telegram task notification", { userId: scanner.userId, taskId, error }))));
   return result;
 }

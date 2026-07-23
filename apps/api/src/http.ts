@@ -1,5 +1,6 @@
 import type { FastifyReply } from "fastify";
 import { DomainError } from "@scan-krwalo/shared";
+import { ZodError } from "zod";
 
 export function ok<T>(reply: FastifyReply, data: T, statusCode = 200) {
   return reply.status(statusCode).send({
@@ -14,6 +15,20 @@ export function fail(reply: FastifyReply, error: unknown) {
     return reply.status(error.statusCode).send({
       success: false,
       error: { code: error.code, message: error.message, details: error.details },
+      meta: { requestId: reply.request.id }
+    });
+  }
+  if (error instanceof ZodError) {
+    return reply.status(400).send({
+      success: false,
+      error: {
+        code: "VALIDATION_ERROR",
+        message: "Check the highlighted fields and try again.",
+        details: error.issues.map((issue) => ({
+          path: issue.path.join("."),
+          message: issue.message
+        }))
+      },
       meta: { requestId: reply.request.id }
     });
   }

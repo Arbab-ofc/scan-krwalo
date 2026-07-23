@@ -20,6 +20,9 @@ const envSchema = z.object({
   PUSH_PUBLIC_KEY: z.string().optional().default(""),
   PUSH_PRIVATE_KEY: z.string().optional().default(""),
   PUSH_SUBJECT: z.string().default("mailto:admin@example.com"),
+  TELEGRAM_BOT_TOKEN: z.string().optional().default(""),
+  TELEGRAM_BOT_USERNAME: z.string().optional().default(""),
+  TELEGRAM_WEBHOOK_SECRET: z.string().optional().default(""),
   RUN_WORKER_IN_API: z.coerce.boolean().default(false)
 });
 

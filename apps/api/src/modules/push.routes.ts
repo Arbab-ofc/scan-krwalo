@@ -3,7 +3,7 @@ import { z } from "zod";
 import { prisma } from "@scan-krwalo/database";
 import { authenticate } from "../authz.js";
 import { ok } from "../http.js";
-import { getPushConfig } from "../services/push.service.js";
+import { getPushConfig, sendPushNotificationNow } from "../services/push.service.js";
 
 const pushSubscriptionSchema = z.object({
   endpoint: z.string().url(),
@@ -25,6 +25,17 @@ export async function registerPushRoutes(app: FastifyInstance) {
       create: { userId: user.id, endpoint: data.endpoint, keys: data.keys }
     });
     return ok(reply, { id: subscription.id }, 201);
+  });
+
+  app.post("/test", async (request, reply) => {
+    const user = await authenticate(request);
+    const result = await sendPushNotificationNow(user.id, {
+      title: "Scan Krwalo test",
+      body: "Browser push notifications are working on this device.",
+      url: "/scanner/live-tasks",
+      tag: "push-test"
+    });
+    return ok(reply, result);
   });
 
   app.delete("/:id", async (request, reply) => {

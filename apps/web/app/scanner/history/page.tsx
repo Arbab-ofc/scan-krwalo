@@ -64,42 +64,42 @@ export default function ScannerHistoryPage() {
 
   return (
     <AppShell role="scanner">
-      <div className="flex flex-col gap-6">
-        <section className="rounded-2xl border border-line bg-white p-5 shadow-sm sm:p-6">
+      <div className="app-page">
+        <section className="app-card">
           <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
-            <div>
-              <p className="text-sm font-semibold uppercase tracking-[.18em] text-accent">Task archive</p>
-              <h1 className="mt-2 text-3xl font-semibold tracking-tight text-ink">Scanner history</h1>
-              <p className="mt-2 text-sm leading-6 text-slate-600">Review grabbed, submitted, completed, expired, and disputed tasks from your scanner account.</p>
+            <div className="min-w-0">
+              <p className="app-eyebrow">Task archive</p>
+              <h1 className="app-title">Scanner history</h1>
+              <p className="app-copy">Review grabbed, submitted, completed, expired, and disputed tasks from your scanner account.</p>
             </div>
-            <button onClick={() => loadTasks(page)} className="focus-ring inline-flex items-center justify-center gap-2 rounded-lg border border-line bg-white px-4 py-2 text-sm font-semibold text-ink shadow-sm">
+            <button onClick={() => loadTasks(page)} className="app-button border border-line bg-white text-ink shadow-sm">
               <RefreshCw size={16} />
               Refresh
             </button>
           </div>
-          <div className="relative mt-5 max-w-md">
+          <div className="relative mt-5 w-full max-w-md">
             <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={17} />
-            <input value={query} onChange={(event) => setQuery(event.target.value)} className="h-11 w-full rounded-lg border border-line bg-white pl-10 pr-4 text-sm shadow-sm" placeholder="Search by task ID, URL, or status" />
+            <input value={query} onChange={(event) => setQuery(event.target.value)} className="h-11 w-full rounded-lg border border-line bg-white pl-10 pr-4 text-sm shadow-sm outline-none transition focus:border-accent focus:ring-4 focus:ring-emerald-100" placeholder="Search by task ID, URL, or status" />
           </div>
           {message && <p className="mt-4 rounded-lg border border-line bg-slate-50 px-4 py-3 text-sm text-slate-700">{message}</p>}
         </section>
 
         <div className="grid gap-4">
           {tasks.map((task) => (
-            <article key={task.id} className="rounded-2xl border border-line bg-white p-5 shadow-sm">
-              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <article key={task.id} className="app-card-compact">
+              <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(210px,260px)] lg:items-start">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="font-mono text-sm font-semibold text-slate-500">{task.publicId}</p>
                     <StatusBadge status={task.status} />
                   </div>
-                  <h2 className="mt-2 text-xl font-semibold text-ink">{task.title || task.normalizedUrl}</h2>
-                  <a href={task.url} target="_blank" rel="noreferrer" className="mt-2 inline-flex max-w-full items-center gap-2 truncate text-sm font-medium text-accent hover:underline">
-                    <span className="truncate">{task.normalizedUrl}</span>
-                    <ExternalLink size={15} />
+                  <h2 className="break-safe mt-2 text-lg font-semibold text-ink sm:text-xl">{task.title || task.normalizedUrl}</h2>
+                  <a href={task.url} target="_blank" rel="noreferrer" className="mt-2 inline-flex max-w-full items-center gap-2 text-sm font-medium text-accent hover:underline">
+                    <span className="break-safe min-w-0">{task.normalizedUrl}</span>
+                    <ExternalLink size={15} className="shrink-0" />
                   </a>
                 </div>
-                <div className="grid min-w-[220px] gap-2 rounded-xl bg-slate-50 p-4 text-sm text-slate-600">
+                <div className="app-meta-panel">
                   <Metric label="Reward" value={formatMoney(task.rewardAmount, task.rewardCurrency)} />
                   <Metric label="Claimed" value={formatDate(task.claimedAt)} />
                   <Metric label="Submitted" value={formatDate(task.scannerSubmittedAt)} />
@@ -118,9 +118,9 @@ export default function ScannerHistoryPage() {
         )}
 
         {data && (
-          <div className="flex flex-col gap-3 rounded-2xl border border-line bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+          <div className="app-pagination">
             <p className="text-sm text-slate-500">Page {data.pagination.page} of {data.pagination.totalPages} · {data.pagination.total} tasks</p>
-            <div className="flex gap-2">
+            <div className="app-pagination-actions">
               <button disabled={!data.pagination.hasPreviousPage} onClick={() => setPage((value) => Math.max(1, value - 1))} className="rounded-lg border border-line px-4 py-2 text-sm font-semibold disabled:opacity-50">Previous</button>
               <button disabled={!data.pagination.hasNextPage} onClick={() => setPage((value) => value + 1)} className="rounded-lg border border-line px-4 py-2 text-sm font-semibold disabled:opacity-50">Next</button>
             </div>
@@ -144,7 +144,7 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 function Metric({ label, value }: { label: string; value: string }) {
-  return <div className="flex justify-between gap-4"><span>{label}</span><span className="font-semibold text-ink">{value}</span></div>;
+  return <div className="flex justify-between gap-4"><span>{label}</span><span className="break-safe text-right font-semibold text-ink">{value}</span></div>;
 }
 
 function formatDate(value: string | null) {

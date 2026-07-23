@@ -48,33 +48,33 @@ export default function CurrentTaskPage() {
   const canSubmit = task?.status === "CLAIMED" && !submitting && Boolean(proof);
   return (
     <AppShell role="scanner">
-      <div className="flex flex-col gap-6">
+      <div className="app-page">
         <section>
-          <p className="text-sm font-semibold uppercase tracking-[.18em] text-accent">Active work</p>
-          <h1 className="mt-2 text-3xl font-semibold tracking-tight text-ink">Current task</h1>
+          <p className="app-eyebrow">Active work</p>
+          <h1 className="app-title">Current task</h1>
         </section>
         {task ? (
-          <div className="rounded-2xl border border-line bg-white p-5 shadow-sm sm:p-6">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-              <div>
+          <div className="app-card">
+            <div className="grid min-w-0 gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-start">
+              <div className="min-w-0">
                 <h2 className="font-mono text-sm font-semibold text-slate-500">{task.publicId}</h2>
-                <p className="mt-2 text-xl font-semibold text-ink">{task.title || task.normalizedUrl}</p>
+                <p className="break-safe mt-2 text-lg font-semibold text-ink sm:text-xl">{task.title || task.normalizedUrl}</p>
               </div>
               {task.status === "CLAIMED" && (
-                <div className="rounded-xl bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">
-                  <Timer className="mr-2 inline" size={17} />
-                  Completion: {remainingTime(task.completionExpiresAt, now)}
+                <div className="flex w-full items-center gap-2 rounded-xl bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800 md:w-auto">
+                  <Timer className="shrink-0" size={17} />
+                  <span>Completion: {remainingTime(task.completionExpiresAt, now)}</span>
                 </div>
               )}
             </div>
-            <a className="focus-ring mt-5 inline-flex items-center gap-2 rounded-lg bg-ink px-5 py-3 font-semibold text-white" href={task.normalizedUrl} target="_blank" rel="noreferrer">
+            <a className="app-button mt-5 bg-ink px-5 py-3 text-white" href={task.normalizedUrl} target="_blank" rel="noreferrer">
               <ExternalLink size={18} />
               Open task URL
             </a>
             {task.instructions && <p className="mt-5 rounded-xl bg-slate-50 p-4 text-sm leading-6 text-slate-600">{task.instructions}</p>}
             <label className="mt-5 flex min-h-36 cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-line bg-slate-50 px-5 py-6 text-center">
               <FileImage className="text-accent" size={28} />
-              <span className="mt-3 text-sm font-semibold text-ink">{proof ? proof.name : "Upload proof image or PDF"}</span>
+              <span className="break-safe mt-3 max-w-full text-sm font-semibold text-ink">{proof ? proof.name : "Upload proof image or PDF"}</span>
               <span className="mt-1 text-xs text-slate-500">JPG, PNG, WEBP, or PDF up to 5 MB</span>
               <input disabled={task.status !== "CLAIMED" || submitting} type="file" accept="image/jpeg,image/png,image/webp,application/pdf" className="sr-only" onChange={(event) => setProof(event.target.files?.[0] ?? null)} />
             </label>

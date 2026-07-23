@@ -185,6 +185,11 @@ model ScannerProfile {
   binanceId             String?
   usdtBep20Address      String?
   preferredPayoutMethod PayoutMethod?
+  telegramChatId        String?         @unique
+  telegramUsername      String?
+  telegramLinkedAt      DateTime?
+  telegramLinkToken     String?         @unique
+  telegramLinkTokenCreatedAt DateTime?
   availableBalance      BigInt          @default(0)
   pendingBalance        BigInt          @default(0)
   reservedForPayout     BigInt          @default(0)

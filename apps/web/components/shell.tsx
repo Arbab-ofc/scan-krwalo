@@ -15,6 +15,7 @@ export function PublicNav() {
         <Link href="/" className="text-lg font-semibold tracking-wide text-ink">Scan Krwalo</Link>
         <div className="hidden items-center gap-2 text-sm text-slate-600 md:flex">
           <Link className="hidden rounded px-3 py-2 hover:text-ink sm:block" href="/how-it-works">How it works</Link>
+          <Link className="hidden rounded px-3 py-2 hover:text-ink sm:block" href="/api-docs">API docs</Link>
           <AuthNav />
         </div>
         <button
@@ -31,6 +32,7 @@ export function PublicNav() {
         <div className="border-t border-line bg-white px-5 py-4 shadow-sm md:hidden">
           <div className="mx-auto grid max-w-6xl gap-2 text-sm">
             <Link onClick={() => setOpen(false)} className="rounded-lg px-3 py-3 font-medium text-slate-600 hover:bg-emerald-50 hover:text-ink" href="/how-it-works">How it works</Link>
+            <Link onClick={() => setOpen(false)} className="rounded-lg px-3 py-3 font-medium text-slate-600 hover:bg-emerald-50 hover:text-ink" href="/api-docs">API docs</Link>
             <Link onClick={() => setOpen(false)} className="rounded-lg px-3 py-3 font-medium text-slate-600 hover:bg-emerald-50 hover:text-ink" href="/support">Support</Link>
             <div className="border-t border-line pt-3"><AuthNav /></div>
           </div>
@@ -57,6 +59,7 @@ export function PublicFooter() {
           <h2 className="text-sm font-semibold text-ink">Platform</h2>
           <div className="mt-3 grid gap-2 text-sm text-slate-600">
             <Link href="/how-it-works" className="hover:text-ink">How it works</Link>
+            <Link href="/api-docs" className="hover:text-ink">API docs</Link>
             <Link href="/signup" className="hover:text-ink">Create account</Link>
           </div>
         </div>
@@ -98,8 +101,8 @@ export function AppShell({ children, role }: { children: React.ReactNode; role: 
   return (
     <div className="min-h-screen bg-surface text-ink">
       <ScannerPresenceHeartbeat role={role} />
-      <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-line bg-white/95 px-5 backdrop-blur lg:hidden">
-        <Link href="/dashboard" className="flex items-center gap-2 text-lg font-semibold text-ink"><Radar className="text-accent" size={20} /> Scan Krwalo</Link>
+      <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-line bg-white/95 px-4 backdrop-blur xl:hidden sm:px-5">
+        <Link href="/dashboard" className="flex min-w-0 items-center gap-2 text-base font-semibold text-ink sm:text-lg"><Radar className="shrink-0 text-accent" size={20} /> <span className="truncate">Scan Krwalo</span></Link>
         <button
           type="button"
           onClick={() => setOpen((value) => !value)}
@@ -111,17 +114,17 @@ export function AppShell({ children, role }: { children: React.ReactNode; role: 
         </button>
       </header>
 
-      {open && <button aria-label="Close menu overlay" className="fixed inset-0 z-30 bg-slate-950/30 lg:hidden" onClick={() => setOpen(false)} />}
+      {open && <button aria-label="Close menu overlay" className="fixed inset-0 z-30 bg-slate-950/30 xl:hidden" onClick={() => setOpen(false)} />}
 
-      <aside className={`fixed inset-y-0 left-0 z-40 w-72 border-r border-line bg-white px-5 py-6 shadow-2xl transition-transform duration-200 lg:translate-x-0 lg:shadow-none ${open ? "translate-x-0" : "-translate-x-full"}`}>
+      <aside className={`fixed inset-y-0 left-0 z-40 flex w-[min(20rem,calc(100vw-2rem))] flex-col border-r border-line bg-white px-5 py-6 shadow-2xl transition-transform duration-200 xl:w-72 xl:translate-x-0 xl:shadow-none ${open ? "translate-x-0" : "-translate-x-full"}`}>
         <Link href="/dashboard" className="mb-8 hidden items-center gap-3 text-xl font-semibold md:flex"><Radar className="text-accent" /> Scan Krwalo</Link>
-        <div className="mb-6 flex items-center justify-between lg:hidden">
+        <div className="mb-6 flex items-center justify-between xl:hidden">
           <Link href="/dashboard" onClick={() => setOpen(false)} className="flex items-center gap-2 text-xl font-semibold"><Radar className="text-accent" /> Scan Krwalo</Link>
           <button type="button" onClick={() => setOpen(false)} className="focus-ring inline-flex h-10 w-10 items-center justify-center rounded-lg border border-line">
             <X size={18} />
           </button>
         </div>
-        <nav className="grid gap-1">
+        <nav className="grid min-h-0 gap-1 overflow-y-auto pb-3">
           {links.map(([href, label]) => (
             <Link onClick={() => setOpen(false)} key={href} href={href} className="focus-ring block rounded-md px-3 py-3 text-sm font-medium text-slate-600 hover:bg-emerald-50 hover:text-ink">{label}</Link>
           ))}
@@ -129,7 +132,7 @@ export function AppShell({ children, role }: { children: React.ReactNode; role: 
           <SidebarLogoutButton />
         </nav>
       </aside>
-      <main className="mx-auto max-w-6xl px-5 pb-10 pt-6 lg:ml-72">{children}</main>
+      <main className="mx-auto w-full max-w-6xl px-4 pb-8 pt-5 sm:px-5 sm:pb-10 sm:pt-6 xl:ml-72 xl:max-w-[calc(100vw-18rem)] xl:px-8 2xl:max-w-6xl">{children}</main>
     </div>
   );
 }
@@ -162,9 +165,9 @@ function ScannerPresenceHeartbeat({ role }: { role: "scanner" | "client" | "admi
 }
 
 export function Stat({ label, value, icon }: { label: string; value: React.ReactNode; icon?: React.ReactNode }) {
-  return <div className="rounded-lg border border-line bg-panel p-4 shadow-sm"><div className="mb-3 flex items-center justify-between text-sm text-slate-500">{label}{icon ?? <WalletCards size={16} />}</div><div className="text-2xl font-semibold text-ink">{value}</div></div>;
+  return <div className="min-w-0 rounded-xl border border-line bg-panel p-4 shadow-sm"><div className="mb-3 flex items-center justify-between gap-3 text-sm text-slate-500"><span className="break-safe">{label}</span><span className="shrink-0">{icon ?? <WalletCards size={16} />}</span></div><div className="break-safe text-xl font-semibold text-ink sm:text-2xl">{value}</div></div>;
 }
 
 export function ButtonLink({ href, children }: { href: string; children: React.ReactNode }) {
-  return <Link href={href} className="focus-ring inline-flex items-center justify-center rounded-md bg-accent px-5 py-3 font-semibold text-white shadow-glow">{children}</Link>;
+  return <Link href={href} className="focus-ring inline-flex min-h-11 w-full items-center justify-center rounded-md bg-accent px-5 py-3 font-semibold text-white shadow-glow sm:w-auto">{children}</Link>;
 }

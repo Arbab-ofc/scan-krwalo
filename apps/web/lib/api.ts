@@ -25,10 +25,23 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
     if (response.status === 401) {
       clearAuthTokens();
     }
-    const message = payload.error?.message ?? "Request failed";
+    const message = formatErrorMessage(payload.error?.message ?? "Request failed", payload.error?.details);
     throw new Error(`${message} (${response.status} ${path})`);
   }
   return payload.data as T;
+}
+
+function formatErrorMessage(message: string, details: unknown) {
+  if (!Array.isArray(details)) return message;
+  const fieldMessages = details
+    .map((detail) => {
+      if (!detail || typeof detail !== "object" || !("message" in detail)) return null;
+      const item = detail as { path?: unknown; message?: unknown };
+      if (typeof item.message !== "string") return null;
+      return typeof item.path === "string" && item.path ? `${item.path}: ${item.message}` : item.message;
+    })
+    .filter(Boolean);
+  return fieldMessages.length > 0 ? `${message} ${fieldMessages.join("; ")}` : message;
 }
 
 export function getRefreshToken() {

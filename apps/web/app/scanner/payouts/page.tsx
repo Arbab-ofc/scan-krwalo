@@ -77,12 +77,12 @@ export default function ScannerPayoutsPage() {
 
   return (
     <AppShell role="scanner">
-      <div className="grid gap-6 xl:grid-cols-[380px_1fr]">
+      <div className="grid min-w-0 gap-5 xl:grid-cols-[360px_minmax(0,1fr)]">
         <aside className="space-y-4">
-          <section className="rounded-3xl border border-line bg-white p-5 shadow-sm sm:p-6">
-            <p className="text-sm font-semibold uppercase tracking-[.18em] text-accent">Scanner wallet</p>
-            <h1 className="mt-2 text-3xl font-semibold tracking-tight text-ink">Payouts</h1>
-            <p className="mt-2 text-sm leading-6 text-slate-600">Request USDT payouts and track every processing state.</p>
+          <section className="app-card">
+            <p className="app-eyebrow">Scanner wallet</p>
+            <h1 className="app-title">Payouts</h1>
+            <p className="app-copy">Request USDT payouts and track every processing state.</p>
             <div className="mt-6 grid gap-3">
               <BalanceRow label="Available" value={formatMoney(wallet?.availableBalance ?? 0, wallet?.currency ?? "USDT")} strong />
               <BalanceRow label="Reserved" value={formatMoney(wallet?.reservedForPayout ?? 0, wallet?.currency ?? "USDT")} />
@@ -90,22 +90,22 @@ export default function ScannerPayoutsPage() {
             </div>
           </section>
 
-          <section className="rounded-3xl border border-line bg-white p-5 shadow-sm sm:p-6">
+          <section className="app-card-compact">
             <h2 className="text-lg font-semibold text-ink">New request</h2>
             <p className="mt-2 text-sm text-slate-500">Minimum payout amount is USDT 0.50.</p>
             <form action={request} className="mt-5 grid gap-3">
               <label className="grid gap-2 text-sm font-medium text-slate-700">
                 Amount
-                <input name="amount" required className="h-12 rounded-xl border border-line bg-white px-4 text-sm shadow-sm outline-none transition focus:border-accent focus:ring-4 focus:ring-emerald-100" placeholder="0.50" />
+                <input name="amount" required className="app-input" placeholder="0.50" />
               </label>
               <label className="grid gap-2 text-sm font-medium text-slate-700">
                 Method
-                <select name="method" className="h-12 rounded-xl border border-line bg-white px-4 text-sm shadow-sm outline-none transition focus:border-accent focus:ring-4 focus:ring-emerald-100">
+                <select name="method" className="app-input">
                   <option value="BINANCE_ID">Binance ID</option>
                   <option value="USDT_BEP20">USDT BEP20</option>
                 </select>
               </label>
-              <button disabled={isPending} className="focus-ring mt-2 inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-accent px-5 font-semibold text-white shadow-glow disabled:cursor-not-allowed disabled:opacity-70">
+              <button disabled={isPending} className="app-button mt-2 min-h-12 rounded-xl bg-accent px-5 text-white shadow-glow disabled:cursor-not-allowed disabled:opacity-70">
                 <WalletCards size={18} />
                 {isPending ? "Requesting..." : "Request payout"}
               </button>
@@ -117,13 +117,13 @@ export default function ScannerPayoutsPage() {
           </section>
         </aside>
 
-        <section className="rounded-3xl border border-line bg-white p-5 shadow-sm sm:p-6">
+        <section className="app-card">
           <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
             <div>
-              <h2 className="text-xl font-semibold text-ink">Payout history</h2>
+              <h2 className="app-section-title">Payout history</h2>
               <p className="text-sm text-slate-500">{payouts?.pagination.total ?? 0} requests</p>
             </div>
-            <button onClick={load} className="focus-ring inline-flex items-center justify-center gap-2 rounded-lg border border-line bg-white px-4 py-2 text-sm font-semibold text-ink shadow-sm">
+            <button onClick={load} className="app-button border border-line bg-white text-ink shadow-sm">
               <RefreshCw size={16} />
               Refresh
             </button>
@@ -135,19 +135,19 @@ export default function ScannerPayoutsPage() {
             {(payouts?.items ?? []).map((payout) => (
               <article key={payout.id} className="rounded-2xl border border-line p-4 transition hover:border-slate-300 hover:bg-slate-50/70">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                  <div>
+                  <div className="min-w-0">
                     <StatusBadge status={payout.status} />
-                    <p className="mt-3 text-2xl font-semibold text-ink">{formatMoney(payout.amount, payout.currency ?? "USDT")}</p>
-                    <p className="mt-1 flex items-center gap-2 text-sm text-slate-500"><Landmark size={15} /> {payout.method.replace("_", " ")}</p>
+                    <p className="break-safe mt-3 text-xl font-semibold text-ink sm:text-2xl">{formatMoney(payout.amount, payout.currency ?? "USDT")}</p>
+                    <p className="mt-1 flex items-center gap-2 text-sm text-slate-500"><Landmark size={15} className="shrink-0" /> <span className="break-safe">{payout.method.replace("_", " ")}</span></p>
                   </div>
                   <div className="text-sm text-slate-500 sm:text-right">
-                    <p className="flex items-center gap-2 sm:justify-end"><Clock3 size={15} /> Requested {formatDate(payout.requestedAt)}</p>
+                    <p className="flex items-center gap-2 sm:justify-end"><Clock3 size={15} className="shrink-0" /> <span>Requested {formatDate(payout.requestedAt)}</span></p>
                     {payout.paidAt && <p className="mt-1">Paid {formatDate(payout.paidAt)}</p>}
                     {payout.rejectedAt && <p className="mt-1">Rejected {formatDate(payout.rejectedAt)}</p>}
                   </div>
                 </div>
-                {payout.transactionReference && <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">Reference: {payout.transactionReference}</p>}
-                {payout.rejectionReason && <p className="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">Reason: {payout.rejectionReason}</p>}
+                {payout.transactionReference && <p className="break-safe mt-3 rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">Reference: {payout.transactionReference}</p>}
+                {payout.rejectionReason && <p className="break-safe mt-3 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">Reason: {payout.rejectionReason}</p>}
               </article>
             ))}
           </div>
@@ -157,7 +157,7 @@ export default function ScannerPayoutsPage() {
           {payouts && (
             <div className="mt-5 flex flex-col gap-3 border-t border-line pt-4 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-sm text-slate-500">Page {payouts.pagination.page} of {payouts.pagination.totalPages}</p>
-              <div className="flex gap-2">
+              <div className="app-pagination-actions">
                 <button disabled={!payouts.pagination.hasPreviousPage} onClick={() => setPage((value) => Math.max(1, value - 1))} className="rounded-lg border border-line px-4 py-2 text-sm font-semibold disabled:opacity-50">Previous</button>
                 <button disabled={!payouts.pagination.hasNextPage} onClick={() => setPage((value) => value + 1)} className="rounded-lg border border-line px-4 py-2 text-sm font-semibold disabled:opacity-50">Next</button>
               </div>
@@ -171,9 +171,9 @@ export default function ScannerPayoutsPage() {
 
 function BalanceRow({ label, value, strong = false }: { label: string; value: string; strong?: boolean }) {
   return (
-    <div className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3">
+    <div className="flex min-w-0 items-center justify-between gap-4 rounded-2xl bg-slate-50 px-4 py-3">
       <span className="text-sm text-slate-500">{label}</span>
-      <strong className={strong ? "text-xl text-ink" : "text-ink"}>{value}</strong>
+      <strong className={`break-safe text-right ${strong ? "text-lg text-ink sm:text-xl" : "text-ink"}`}>{value}</strong>
     </div>
   );
 }

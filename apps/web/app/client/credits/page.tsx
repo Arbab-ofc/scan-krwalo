@@ -37,31 +37,31 @@ export default function CreditsPage() {
 
   return (
     <AppShell role="client">
-      <div className="flex flex-col gap-6">
-        <section className="rounded-2xl border border-line bg-white p-5 shadow-sm sm:p-6">
-          <p className="text-sm font-semibold uppercase tracking-[.18em] text-accent">Credits</p>
-          <h1 className="mt-2 text-3xl font-semibold tracking-tight text-ink">Credits and redeem code</h1>
-          <p className="mt-2 text-sm leading-6 text-slate-600">Redeem new CLI codes here. Posting a valid task reserves one credit; expired unclaimed tasks return that credit automatically.</p>
+      <div className="app-page">
+        <section className="app-card">
+          <p className="app-eyebrow">Credits</p>
+          <h1 className="app-title">Credits and redeem code</h1>
+          <p className="app-copy">Redeem new CLI codes here. Posting a valid task reserves one credit; expired unclaimed tasks return that credit automatically.</p>
         </section>
 
-        <div className="grid gap-4 sm:grid-cols-4">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <Stat label="Available" value={data?.availableCredits ?? 0} />
           <Stat label="Reserved" value={data?.reservedCredits ?? 0} />
           <Stat label="Used" value={data?.usedCredits ?? 0} />
           <Stat label="Total added" value={data?.totalAddedCredits ?? 0} />
         </div>
 
-        <section className="rounded-2xl border border-line bg-white p-5 shadow-sm sm:p-6">
-          <div className="flex items-center gap-3">
-            <div className="rounded-xl bg-emerald-50 p-3 text-accent"><CreditCard size={22} /></div>
-            <div>
-              <h2 className="text-xl font-semibold text-ink">Redeem Client Code</h2>
+        <section className="app-card">
+          <div className="flex items-start gap-3">
+            <div className="shrink-0 rounded-xl bg-emerald-50 p-3 text-accent"><CreditCard size={22} /></div>
+            <div className="min-w-0">
+              <h2 className="app-section-title">Redeem Client Code</h2>
               <p className="text-sm text-slate-500">Enter a 12-character CLI code from Admin.</p>
             </div>
           </div>
-          <form action={redeem} className="mt-5 flex flex-col gap-3 sm:flex-row">
-            <input name="code" required maxLength={12} className="h-12 flex-1 rounded-xl border border-line bg-white px-4 font-mono text-sm uppercase tracking-wider shadow-sm outline-none transition focus:border-accent focus:ring-4 focus:ring-emerald-100" placeholder="CLI123456789" />
-            <button disabled={redeeming} className="focus-ring inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-accent px-5 py-3 font-semibold text-white shadow-glow disabled:cursor-not-allowed disabled:opacity-60">
+          <form action={redeem} className="mt-5 grid gap-3 md:grid-cols-[1fr_auto]">
+            <input name="code" required maxLength={12} className="app-input font-mono uppercase tracking-wider" placeholder="CLI123456789" />
+            <button disabled={redeeming} className="app-button rounded-xl bg-accent px-5 py-3 text-white shadow-glow disabled:cursor-not-allowed disabled:opacity-60">
               {redeeming ? <Loader2 className="animate-spin" size={18} /> : <PlusCircle size={18} />}
               {redeeming ? "Redeeming..." : "Add credits"}
             </button>

@@ -58,3 +58,29 @@ export async function sendQueuedPushNotification(userId: string, payload: { titl
     }
   }));
 }
+
+export async function sendPushNotificationNow(userId: string, payload: { title: string; body: string; url?: string; tag?: string }) {
+  if (!pushConfigured) return { configured: false, attempted: 0, sent: 0, removed: 0 };
+  const subscriptions = await prisma.pushSubscription.findMany({ where: { userId } });
+  let sent = 0;
+  let removed = 0;
+  await Promise.all(subscriptions.map(async (subscription) => {
+    try {
+      await webPush.sendNotification(
+        {
+          endpoint: subscription.endpoint,
+          keys: subscription.keys as { p256dh: string; auth: string }
+        },
+        JSON.stringify(payload)
+      );
+      sent += 1;
+    } catch (error) {
+      const statusCode = typeof error === "object" && error && "statusCode" in error ? Number(error.statusCode) : null;
+      if (statusCode === 404 || statusCode === 410) {
+        await prisma.pushSubscription.deleteMany({ where: { endpoint: subscription.endpoint } });
+        removed += 1;
+      }
+    }
+  }));
+  return { configured: true, attempted: subscriptions.length, sent, removed };
+}

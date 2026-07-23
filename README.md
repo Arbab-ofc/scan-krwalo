@@ -83,7 +83,9 @@ Activation:
 Tasks:
 
 - `POST /api/v1/tasks`
+- `POST /api/v1/tasks/bulk`
 - `GET /api/v1/tasks`
+- `GET /api/v1/tasks/proofs/:key`
 - `GET /api/v1/tasks/:id`
 - `POST /api/v1/tasks/:id/claim`
 - `POST /api/v1/tasks/:id/submit`
@@ -94,12 +96,16 @@ Tasks:
 Scanner:
 
 - `GET /api/v1/scanner/dashboard`
+- `GET /api/v1/scanner/telegram`
+- `POST /api/v1/scanner/telegram/link`
+- `DELETE /api/v1/scanner/telegram`
 - `GET /api/v1/scanner/live-tasks`
 - `GET /api/v1/scanner/current-task`
 - `GET /api/v1/scanner/history`
 - `PATCH /api/v1/scanner/profile`
 - `POST /api/v1/scanner/presence/online`
 - `POST /api/v1/scanner/presence/offline`
+- `GET /api/v1/scanner/presence/status`
 - `GET /api/v1/scanner/wallet`
 - `GET /api/v1/scanner/wallet/transactions`
 - `POST /api/v1/scanner/payouts`
@@ -109,6 +115,7 @@ Client:
 
 - `GET /api/v1/client/dashboard`
 - `GET /api/v1/client/credits`
+- `GET /api/v1/client/scanner-presence`
 - `GET /api/v1/client/credit-transactions`
 - `GET /api/v1/client/tasks`
 
@@ -120,10 +127,15 @@ Admin:
 - `GET /api/v1/admin/activation-codes`
 - `GET /api/v1/admin/activation-codes/:id`
 - `POST /api/v1/admin/activation-codes/:id/revoke`
+- `DELETE /api/v1/admin/activation-codes/:id`
 - `GET /api/v1/admin/scanners`
 - `GET /api/v1/admin/clients`
 - `PATCH /api/v1/admin/users/:id/status`
+- `GET /api/v1/admin/tasks/export.csv`
+- `GET /api/v1/admin/tasks/:id`
 - `GET /api/v1/admin/tasks`
+- `GET /api/v1/admin/reports/:report/export.csv`
+- `GET /api/v1/admin/reports/:report`
 - `GET /api/v1/admin/disputes`
 - `POST /api/v1/admin/disputes/:id/resolve`
 - `GET /api/v1/admin/payouts`
@@ -132,6 +144,7 @@ Admin:
 - `POST /api/v1/admin/payouts/:id/reject`
 - `GET /api/v1/admin/settings`
 - `PATCH /api/v1/admin/settings`
+- `POST /api/v1/admin/telegram/webhook`
 - `GET /api/v1/admin/audit-logs`
 
 Notifications:
@@ -140,6 +153,17 @@ Notifications:
 - `GET /api/v1/notifications/unread-count`
 - `POST /api/v1/notifications/:id/read`
 - `POST /api/v1/notifications/read-all`
+
+Push:
+
+- `GET /api/v1/push-subscriptions/public-key`
+- `POST /api/v1/push-subscriptions`
+- `POST /api/v1/push-subscriptions/test`
+- `DELETE /api/v1/push-subscriptions/:id`
+
+Telegram:
+
+- `POST /api/v1/telegram/webhook`
 
 Settings:
 
@@ -234,8 +258,19 @@ S3_FORCE_PATH_STYLE=true
 PUSH_PUBLIC_KEY=...
 PUSH_PRIVATE_KEY=...
 PUSH_SUBJECT=mailto:admin@example.com
+TELEGRAM_BOT_TOKEN=...
+TELEGRAM_BOT_USERNAME=YourBotUsername
+TELEGRAM_WEBHOOK_SECRET=optional-random-secret
 RUN_WORKER_IN_API=true
 ```
+
+Telegram scanner alerts:
+
+1. Create a bot with BotFather and copy the bot token.
+2. Configure `TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_USERNAME`, and optionally `TELEGRAM_WEBHOOK_SECRET` in environment variables, or enter them in **Admin > Settings**.
+3. Click **Install Telegram webhook** in Admin settings. The API saves the current admin-panel values when present, then calls Telegram `setWebhook` with the configured token and webhook secret.
+
+Scanners then open the scanner dashboard, generate a Telegram link, and press Start in the bot.
 
 Optional seed variables, only when running the seed command:
 

@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 export const signupSchema = z.object({
-  username: z.string().trim().min(3).max(32).regex(/^[a-zA-Z0-9_]+$/),
+  username: z.string().trim().min(3).max(32).regex(/^[\p{L}\p{N}_]+$/u, "Use letters, numbers, or underscores only"),
   email: z.string().trim().email().transform((email) => email.toLowerCase()),
   password: z.string().min(10).regex(/[A-Z]/).regex(/[a-z]/).regex(/[0-9]/),
   confirmPassword: z.string(),
@@ -36,6 +36,10 @@ export const taskCreateSchema = z.object({
   title: z.string().trim().max(120).optional(),
   instructions: z.string().trim().max(2000).optional(),
   customRewardAmount: z.string().regex(/^\d+(\.\d{1,2})?$/).optional()
+});
+
+export const taskBulkCreateSchema = z.object({
+  urls: z.array(z.string().trim().url()).min(1).max(50)
 });
 
 export const submitTaskSchema = z.object({

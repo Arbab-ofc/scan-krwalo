@@ -6,7 +6,7 @@ import { extname, join } from "node:path";
 import { prisma } from "@scan-krwalo/database";
 import { authenticate, requireActivated, requireRole } from "../authz.js";
 import { ok } from "../http.js";
-import { claimTask, confirmTask, createTask, hideClientTaskReward, listTasks, submitTask } from "../services/tasks.service.js";
+import { claimTask, confirmTask, createBulkTasks, createTask, hideClientTaskReward, listTasks, submitTask } from "../services/tasks.service.js";
 import { DomainError } from "@scan-krwalo/shared";
 import { getPagination } from "../pagination.js";
 
@@ -18,6 +18,15 @@ export async function registerTaskRoutes(app: FastifyInstance) {
     if (!["CLIENT", "ADMIN"].includes(user.role)) throw new DomainError("FORBIDDEN", "Only clients and admins can post tasks.", 403);
     const task = await createTask(user.id, user.role as "CLIENT" | "ADMIN", request.body);
     return ok(reply, user.role === "CLIENT" ? hideClientTaskReward(task) : task, 201);
+  });
+  app.post("/bulk", async (request, reply) => {
+    const user = await requireActivated(request);
+    if (!["CLIENT", "ADMIN"].includes(user.role)) throw new DomainError("FORBIDDEN", "Only clients and admins can post tasks.", 403);
+    const tasks = await createBulkTasks(user.id, user.role as "CLIENT" | "ADMIN", request.body);
+    return ok(reply, {
+      count: tasks.length,
+      tasks: user.role === "CLIENT" ? tasks.map(hideClientTaskReward) : tasks
+    }, 201);
   });
   app.get("/", async (request, reply) => {
     const user = await authenticate(request);

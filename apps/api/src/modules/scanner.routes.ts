@@ -7,12 +7,25 @@ import { requestPayout, updateScannerProfile } from "../services/payouts.service
 import { getPagination, paginated } from "../pagination.js";
 import { countOnlineScanners, setScannerOnline } from "../services/presence.service.js";
 import { emitToRole } from "../realtime.js";
+import { createScannerTelegramLink, getScannerTelegramStatus, unlinkScannerTelegram } from "../services/telegram.service.js";
 
 export async function registerScannerRoutes(app: FastifyInstance) {
   app.get("/dashboard", async (request, reply) => {
     const user = await requireRole(request, ["SCANNER"]);
     const scanner = await prisma.scannerProfile.findUnique({ where: { userId: user.id }, include: { wallet: true } });
     return ok(reply, { scanner, serverTime: new Date().toISOString() });
+  });
+  app.get("/telegram", async (request, reply) => {
+    const user = await requireRole(request, ["SCANNER"]);
+    return ok(reply, await getScannerTelegramStatus(user.id));
+  });
+  app.post("/telegram/link", async (request, reply) => {
+    const user = await requireRole(request, ["SCANNER"]);
+    return ok(reply, await createScannerTelegramLink(user.id));
+  });
+  app.delete("/telegram", async (request, reply) => {
+    const user = await requireRole(request, ["SCANNER"]);
+    return ok(reply, await unlinkScannerTelegram(user.id));
   });
   app.get("/live-tasks", async (request, reply) => {
     await requireRole(request, ["SCANNER"]);

@@ -6,6 +6,7 @@ import {
   displayToMinorUnits,
   DomainError,
   normalizeTaskUrl,
+  taskBulkCreateSchema,
   taskCreateSchema,
   submitTaskSchema
 } from "@scan-krwalo/shared";
@@ -66,20 +67,85 @@ async function reserveClientCredit(tx: Prisma.TransactionClient, clientId: strin
   });
 }
 
-export async function createTask(actorUserId: string, actorRole: "CLIENT" | "ADMIN", input: unknown) {
-  const data = taskCreateSchema.parse(input);
-  const settings = await getSettings();
-  let normalized;
+function normalizeTaskInput(url: string, blockedDomains: string[]) {
   try {
-    normalized = normalizeTaskUrl(data.url, settings.blockedDomains);
+    return normalizeTaskUrl(url, blockedDomains);
   } catch {
     throw new DomainError("TASK_INVALID_URL", "Task URL is invalid or blocked.", 400);
   }
+}
+
+async function publishTaskNotifications(task: { id: string; publicId: string }, claimExpiresAt: Date) {
+  await notifyEligibleOnlineScannersForTask(task.id);
+  await scheduleClaimExpiry(task.id, Math.max(0, claimExpiresAt.getTime() - Date.now()));
+  emitToRole("SCANNER", "task:available", { taskId: task.id, publicId: task.publicId });
+  emitToRole("SCANNER", "notification:new", { type: "TASK_AVAILABLE", taskId: task.id });
+}
+
+async function createAvailableTask(tx: Prisma.TransactionClient, input: {
+  actorUserId: string;
+  actorRole: "CLIENT" | "ADMIN";
+  clientId?: string;
+  url: string;
+  normalizedUrl: string;
+  urlHash: string;
+  title?: string;
+  instructions?: string;
+  rewardAmount: bigint;
+  rewardCurrency: string;
+  rewardSource: "DEFAULT" | "ADMIN_CUSTOM";
+  now: Date;
+  claimExpiresAt: Date;
+  taskClaimWindowSeconds: number;
+  taskCompletionWindowSeconds: number;
+  clientReviewWindowSeconds: number;
+}) {
+  const task = await tx.task.create({
+    data: {
+      publicId: publicId(),
+      postedByUserId: input.actorUserId,
+      postedByRole: input.actorRole,
+      clientId: input.clientId,
+      url: input.url,
+      normalizedUrl: input.normalizedUrl,
+      urlHash: input.urlHash,
+      title: input.title,
+      instructions: input.instructions,
+      status: "AVAILABLE",
+      rewardAmount: input.rewardAmount,
+      rewardCurrency: input.rewardCurrency,
+      rewardSource: input.rewardSource,
+      rewardConfiguredAt: input.now,
+      claimWindowSeconds: input.taskClaimWindowSeconds,
+      completionWindowSeconds: input.taskCompletionWindowSeconds,
+      clientReviewWindowSeconds: input.clientReviewWindowSeconds,
+      publishedAt: input.now,
+      claimExpiresAt: input.claimExpiresAt
+    }
+  });
+  if (input.clientId) await reserveClientCredit(tx, input.clientId, task.id, input.actorUserId);
+  await tx.taskEvent.create({
+    data: {
+      taskId: task.id,
+      eventType: "TASK_CREATED",
+      previousStatus: "DRAFT",
+      newStatus: "AVAILABLE",
+      actorUserId: input.actorUserId,
+      actorRole: input.actorRole === "ADMIN" ? "ADMIN" : "CLIENT"
+    }
+  });
+  await tx.auditLog.create({ data: { actorUserId: input.actorUserId, action: "TASK_CREATED", entityType: "Task", entityId: task.id } });
+  return task;
+}
+
+export async function createTask(actorUserId: string, actorRole: "CLIENT" | "ADMIN", input: unknown) {
+  const data = taskCreateSchema.parse(input);
+  const settings = await getSettings();
+  const normalized = normalizeTaskInput(data.url, settings.blockedDomains);
   const rewardAmount = actorRole === "ADMIN" && data.customRewardAmount
     ? displayToMinorUnits(data.customRewardAmount)
     : BigInt(settings.defaultScannerReward);
   const now = new Date();
-  const publishedAt = now;
   const claimExpiresAt = new Date(now.getTime() + settings.taskClaimWindowSeconds * 1000);
   const result = await prisma.$transaction(async (tx) => {
     const client = actorRole === "CLIENT"
@@ -88,48 +154,71 @@ export async function createTask(actorUserId: string, actorRole: "CLIENT" | "ADM
     if (actorRole === "CLIENT" && (!client || client.status !== "ACTIVE")) {
       throw new DomainError("FORBIDDEN", "Client profile is not active.", 403);
     }
-    const task = await tx.task.create({
-      data: {
-        publicId: publicId(),
-        postedByUserId: actorUserId,
-        postedByRole: actorRole,
+    return createAvailableTask(tx, {
+      actorUserId,
+      actorRole,
+      clientId: client?.id,
+      url: data.url,
+      normalizedUrl: normalized.normalizedUrl,
+      urlHash: normalized.urlHash,
+      title: data.title,
+      instructions: data.instructions,
+      rewardAmount,
+      rewardCurrency: settings.rewardCurrency,
+      rewardSource: actorRole === "ADMIN" && data.customRewardAmount ? "ADMIN_CUSTOM" : "DEFAULT",
+      now,
+      claimExpiresAt,
+      taskClaimWindowSeconds: settings.taskClaimWindowSeconds,
+      taskCompletionWindowSeconds: settings.taskCompletionWindowSeconds,
+      clientReviewWindowSeconds: settings.clientReviewWindowSeconds
+    });
+  });
+  await publishTaskNotifications(result, claimExpiresAt);
+  return result;
+}
+
+export async function createBulkTasks(actorUserId: string, actorRole: "CLIENT" | "ADMIN", input: unknown) {
+  const data = taskBulkCreateSchema.parse(input);
+  const settings = await getSettings();
+  const normalizedUrls = data.urls.map((url) => ({ url, normalized: normalizeTaskInput(url, settings.blockedDomains) }));
+  const rewardAmount = BigInt(settings.defaultScannerReward);
+  const now = new Date();
+  const claimExpiresAt = new Date(now.getTime() + settings.taskClaimWindowSeconds * 1000);
+  const tasks = await prisma.$transaction(async (tx) => {
+    const client = actorRole === "CLIENT"
+      ? await tx.clientProfile.findUnique({ where: { userId: actorUserId }, include: { creditAccount: true } })
+      : null;
+    if (actorRole === "CLIENT" && (!client || client.status !== "ACTIVE")) {
+      throw new DomainError("FORBIDDEN", "Client profile is not active.", 403);
+    }
+    if (client && (!client.creditAccount || client.creditAccount.availableCredits < normalizedUrls.length)) {
+      throw new DomainError("CLIENT_NO_TASK_CREDITS", `You need ${normalizedUrls.length} available task credits.`, 409);
+    }
+    const created = [];
+    for (const item of normalizedUrls) {
+      created.push(await createAvailableTask(tx, {
+        actorUserId,
+        actorRole,
         clientId: client?.id,
-        url: data.url,
-        normalizedUrl: normalized.normalizedUrl,
-        urlHash: normalized.urlHash,
-        title: data.title,
-        instructions: data.instructions,
-        status: "AVAILABLE",
+        url: item.url,
+        normalizedUrl: item.normalized.normalizedUrl,
+        urlHash: item.normalized.urlHash,
         rewardAmount,
         rewardCurrency: settings.rewardCurrency,
-        rewardSource: actorRole === "ADMIN" && data.customRewardAmount ? "ADMIN_CUSTOM" : "DEFAULT",
-        rewardConfiguredAt: now,
-        claimWindowSeconds: settings.taskClaimWindowSeconds,
-        completionWindowSeconds: settings.taskCompletionWindowSeconds,
-        clientReviewWindowSeconds: settings.clientReviewWindowSeconds,
-        publishedAt,
-        claimExpiresAt
-      }
-    });
-    if (client) await reserveClientCredit(tx, client.id, task.id, actorUserId);
-    await tx.taskEvent.create({
-      data: {
-        taskId: task.id,
-        eventType: "TASK_CREATED",
-        previousStatus: "DRAFT",
-        newStatus: "AVAILABLE",
-        actorUserId,
-        actorRole: actorRole === "ADMIN" ? "ADMIN" : "CLIENT"
-      }
-    });
-    await tx.auditLog.create({ data: { actorUserId, action: "TASK_CREATED", entityType: "Task", entityId: task.id } });
-    return task;
-  });
-  await notifyEligibleOnlineScannersForTask(result.id);
-  await scheduleClaimExpiry(result.id, Math.max(0, claimExpiresAt.getTime() - Date.now()));
-  emitToRole("SCANNER", "task:available", { taskId: result.id, publicId: result.publicId });
-  emitToRole("SCANNER", "notification:new", { type: "TASK_AVAILABLE", taskId: result.id });
-  return result;
+        rewardSource: "DEFAULT",
+        now,
+        claimExpiresAt,
+        taskClaimWindowSeconds: settings.taskClaimWindowSeconds,
+        taskCompletionWindowSeconds: settings.taskCompletionWindowSeconds,
+        clientReviewWindowSeconds: settings.clientReviewWindowSeconds
+      }));
+    }
+    return created;
+  }, { maxWait: 10_000, timeout: 30_000 });
+  for (const task of tasks) {
+    await publishTaskNotifications(task, claimExpiresAt);
+  }
+  return tasks;
 }
 
 export async function claimTask(userId: string, taskId: string) {

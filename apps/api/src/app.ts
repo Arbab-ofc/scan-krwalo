@@ -17,6 +17,7 @@ import { registerClientRoutes } from "./modules/client.routes.js";
 import { registerAdminRoutes } from "./modules/admin.routes.js";
 import { registerNotificationRoutes } from "./modules/notifications.routes.js";
 import { registerPushRoutes } from "./modules/push.routes.js";
+import { registerTelegramRoutes } from "./modules/telegram.routes.js";
 
 export async function buildApp() {
   const app = Fastify({
@@ -53,6 +54,7 @@ export async function buildApp() {
   await app.register(registerAdminRoutes, { prefix: "/api/v1/admin" });
   await app.register(registerNotificationRoutes, { prefix: "/api/v1/notifications" });
   await app.register(registerPushRoutes, { prefix: "/api/v1/push-subscriptions" });
+  await app.register(registerTelegramRoutes, { prefix: "/api/v1/telegram" });
 
   return app;
 }

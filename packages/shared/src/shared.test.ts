@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { displayToMinorUnits, generateActivationCode, maskActivationCode, minorUnitsToDisplay, normalizeTelegramUsername, normalizeTaskUrl, validateActivationCodeFormat, canTransitionTask } from "./index.js";
+import { displayToMinorUnits, generateActivationCode, maskActivationCode, minorUnitsToDisplay, normalizeTelegramUsername, normalizeTaskUrl, validateActivationCodeFormat, canTransitionTask, signupSchema, taskBulkCreateSchema } from "./index.js";
 
 describe("activation codes", () => {
   it("generates SCN and CLI codes with exactly nine digits", () => {
@@ -19,6 +19,29 @@ describe("telegram", () => {
   });
 });
 
+describe("signup", () => {
+  it("accepts international usernames", () => {
+    const parsed = signupSchema.parse({
+      username: "扫描员123",
+      email: "scanner@example.cn",
+      password: "Scanner1234",
+      confirmPassword: "Scanner1234",
+      role: "SCANNER"
+    });
+    expect(parsed.username).toBe("扫描员123");
+  });
+
+  it("rejects usernames with spaces or punctuation", () => {
+    expect(() => signupSchema.parse({
+      username: "scan user!",
+      email: "scanner@example.cn",
+      password: "Scanner1234",
+      confirmPassword: "Scanner1234",
+      role: "SCANNER"
+    })).toThrow();
+  });
+});
+
 describe("money", () => {
   it("converts display amounts to integer minor units", () => {
     expect(displayToMinorUnits("10.50")).toBe(1050n);
@@ -33,6 +56,12 @@ describe("task URLs", () => {
     expect(normalizeTaskUrl("HTTPS://Example.COM/a#frag").normalizedUrl).toBe("https://example.com/a");
     expect(() => normalizeTaskUrl("javascript:alert(1)")).toThrow();
     expect(() => normalizeTaskUrl("https://evil.example.com", ["example.com"])).toThrow();
+  });
+
+  it("accepts multiple task URLs for bulk posting", () => {
+    expect(taskBulkCreateSchema.parse({
+      urls: ["https://example.com/one", "https://example.com/two"]
+    }).urls).toHaveLength(2);
   });
 });
 

@@ -1,11 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { AppShell, Stat } from "../../components/shell";
 import { api } from "../../lib/api";
 import { getLiveSocket, useLiveRefresh } from "../../lib/live";
 import { formatMoney } from "../../lib/money";
-import { enablePushNotifications, pushSupportStatus } from "../../lib/push";
+import { enablePushNotifications, pushSupportStatus, sendTestPushNotification } from "../../lib/push";
 
 export default function ScannerDashboard() {
   const [data, setData] = useState<any>(null);
@@ -24,13 +25,13 @@ export default function ScannerDashboard() {
 
   return (
     <AppShell role="scanner">
-      <div className="flex flex-col gap-6">
-        <section className="rounded-2xl border border-line bg-white p-5 shadow-sm sm:p-6">
-          <p className="text-sm font-semibold uppercase tracking-[.18em] text-accent">Scanner workspace</p>
-          <h1 className="mt-2 text-3xl font-semibold tracking-tight text-ink">Scanner dashboard</h1>
-          <p className="mt-2 text-sm text-slate-600">{user?.username} · {user?.email}</p>
+      <div className="app-page">
+        <section className="app-card">
+          <p className="app-eyebrow">Scanner workspace</p>
+          <h1 className="app-title">Scanner dashboard</h1>
+          <p className="mt-2 break-safe text-sm text-slate-600">{user?.username} · {user?.email}</p>
         </section>
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <Stat label="Available" value={formatMoney(data?.scanner?.availableBalance ?? 0, "USDT")} />
           <Stat label="Lifetime" value={formatMoney(data?.scanner?.lifetimeEarnings ?? 0, "USDT")} />
           <Stat label="Completed" value={data?.scanner?.completedTaskCount ?? 0} />
@@ -38,9 +39,98 @@ export default function ScannerDashboard() {
         <div className="grid gap-4 lg:grid-cols-2">
           <OnlineToggle initialOnline={!!data?.scanner?.isOnline} onChanged={loadDashboard} />
           <PushNotificationsCard />
+          <TelegramNotificationsCard />
         </div>
       </div>
     </AppShell>
+  );
+}
+
+function TelegramNotificationsCard() {
+  const [status, setStatus] = useState<{
+    enabled: boolean;
+    username: string | null;
+    linked: boolean;
+    telegramUsername?: string | null;
+    linkedAt?: string | null;
+  } | null>(null);
+  const [deepLink, setDeepLink] = useState<string | null>(null);
+  const [message, setMessage] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  async function load() {
+    setStatus(await api("/scanner/telegram"));
+  }
+
+  useEffect(() => {
+    load().catch((error) => setMessage(error instanceof Error ? error.message : "Could not load Telegram status."));
+  }, []);
+
+  async function linkTelegram() {
+    setLoading(true);
+    setMessage("");
+    try {
+      const result = await api<{ enabled: boolean; linked: boolean; username: string | null; deepLink: string | null }>("/scanner/telegram/link", { method: "POST", body: "{}" });
+      setStatus((current) => ({ ...(current ?? result), enabled: result.enabled, username: result.username, linked: result.linked }));
+      setDeepLink(result.deepLink);
+      if (!result.enabled) setMessage("Telegram bot is not configured on the server.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not create Telegram link.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function unlinkTelegram() {
+    setLoading(true);
+    setMessage("");
+    try {
+      await api("/scanner/telegram", { method: "DELETE" });
+      setDeepLink(null);
+      await load();
+      setMessage("Telegram alerts unlinked.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not unlink Telegram.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="app-card-compact lg:col-span-2">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <h2 className="text-lg font-semibold text-ink">Telegram task alerts</h2>
+          <p className="mt-2 text-sm leading-6 text-slate-500">
+            Link your Telegram account to receive every new client task in the bot with a live-task button.
+          </p>
+          {status?.linked && (
+            <p className="mt-3 inline-flex rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-800">
+              Linked{status.telegramUsername ? ` to @${status.telegramUsername}` : ""}
+            </p>
+          )}
+        </div>
+        <div className="app-actions sm:justify-end">
+          <button onClick={linkTelegram} disabled={loading} className="app-button rounded-md bg-ink px-5 py-3 text-white disabled:cursor-not-allowed disabled:opacity-60">
+            {loading ? "Working..." : status?.linked ? "Refresh link" : "Link Telegram"}
+          </button>
+          {status?.linked && (
+            <button onClick={unlinkTelegram} disabled={loading} className="app-button rounded-md border border-line bg-white px-5 py-3 text-ink disabled:cursor-not-allowed disabled:opacity-60">
+              Unlink
+            </button>
+          )}
+        </div>
+      </div>
+      {deepLink && (
+        <div className="mt-4 rounded-xl border border-line bg-slate-50 p-4">
+          <p className="text-sm text-slate-600">Open this link, then press Start in Telegram.</p>
+          <Link href={deepLink} target="_blank" rel="noreferrer" className="mt-3 inline-flex max-w-full break-safe text-sm font-semibold text-accent hover:underline">
+            {deepLink}
+          </Link>
+        </div>
+      )}
+      {message && <p className="mt-3 text-sm text-slate-600">{message}</p>}
+    </div>
   );
 }
 
@@ -70,9 +160,9 @@ function OnlineToggle({ initialOnline, onChanged }: { initialOnline: boolean; on
     }
   }
   return (
-    <div className="rounded-2xl border border-line bg-white p-5 shadow-sm">
-      <div className="flex items-center justify-between gap-4">
-        <div>
+    <div className="app-card-compact">
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
           <h2 className="text-lg font-semibold text-ink">Scanner presence</h2>
           <p className="mt-1 text-sm text-slate-500">{online ? "Online and eligible for live tasks." : "Offline. New tasks will not be sent to this account."}</p>
         </div>
@@ -98,6 +188,7 @@ function OnlineToggle({ initialOnline, onChanged }: { initialOnline: boolean; on
 function PushNotificationsCard() {
   const [status, setStatus] = useState("checking");
   const [message, setMessage] = useState("");
+  const [testing, setTesting] = useState(false);
   useEffect(() => setStatus(pushSupportStatus()), []);
   async function enable() {
     setMessage("");
@@ -109,13 +200,38 @@ function PushNotificationsCard() {
       setMessage(error instanceof Error ? error.message : "Could not enable push notifications.");
     }
   }
+  async function test() {
+    setTesting(true);
+    setMessage("");
+    try {
+      const result = await sendTestPushNotification();
+      if (!result.configured) {
+        setMessage("Push notifications are not configured on the server.");
+      } else if (result.sent > 0) {
+        setMessage(`Test push sent to ${result.sent} device${result.sent === 1 ? "" : "s"}.`);
+      } else if (result.attempted === 0) {
+        setMessage("No push subscription is saved for this account. Refresh the subscription first.");
+      } else {
+        setMessage("The server found a subscription but could not send a test push.");
+      }
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not send a test push notification.");
+    } finally {
+      setTesting(false);
+    }
+  }
   return (
-    <div className="rounded-2xl border border-line bg-white p-5 shadow-sm">
+    <div className="app-card-compact">
       <h2 className="text-lg font-semibold text-ink">Device notifications</h2>
       <p className="mt-2 text-sm text-slate-500">Enable this once per phone, tablet, or computer to receive new task alerts.</p>
-      <button disabled={status === "granted"} onClick={enable} className="focus-ring mt-4 rounded-md bg-ink px-5 py-3 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60">
-        {status === "granted" ? "Enabled on this device" : "Enable push notifications"}
-      </button>
+      <div className="app-actions mt-4">
+        <button onClick={enable} className="app-button rounded-md bg-ink px-5 py-3 text-white">
+          {status === "granted" ? "Refresh push subscription" : "Enable push notifications"}
+        </button>
+        <button onClick={test} disabled={testing} className="app-button rounded-md border border-line bg-white px-5 py-3 text-ink disabled:cursor-not-allowed disabled:opacity-60">
+          {testing ? "Sending..." : "Send test push"}
+        </button>
+      </div>
       {message && <p className="mt-3 text-sm text-slate-600">{message}</p>}
     </div>
   );
