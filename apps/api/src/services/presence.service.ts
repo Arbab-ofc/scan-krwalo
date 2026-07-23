@@ -16,9 +16,6 @@ export async function countOnlineScanners() {
         role: "SCANNER",
         activationStatus: "ACTIVE",
         accountStatus: "ACTIVE"
-      },
-      assignedTasks: {
-        none: { status: { in: ["CLAIMED", "SCANNER_SUBMITTED", "DISPUTED"] } }
       }
     }
   });

@@ -36,8 +36,11 @@ export async function registerScannerRoutes(app: FastifyInstance) {
   app.get("/current-task", async (request, reply) => {
     const user = await requireRole(request, ["SCANNER"]);
     const scanner = await prisma.scannerProfile.findUnique({ where: { userId: user.id } });
-    const task = await prisma.task.findFirst({ where: { assignedScannerId: scanner?.id, status: { in: ["CLAIMED", "SCANNER_SUBMITTED", "DISPUTED"] } } });
-    return ok(reply, { serverTime: new Date().toISOString(), task });
+    const tasks = scanner ? await prisma.task.findMany({
+      where: { assignedScannerId: scanner.id, status: { in: ["CLAIMED", "SCANNER_SUBMITTED", "DISPUTED"] } },
+      orderBy: { claimedAt: "desc" }
+    }) : [];
+    return ok(reply, { serverTime: new Date().toISOString(), task: tasks[0] ?? null, tasks });
   });
   app.get("/history", async (request, reply) => {
     const user = await requireRole(request, ["SCANNER"]);

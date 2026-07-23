@@ -25,6 +25,8 @@ type StoredTaskProof = {
   checksum?: string;
 };
 
+const UNCLAIMED_TASK_REFUND_SECONDS = 120;
+
 function publicId() {
   return `TASK-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
 }
@@ -146,7 +148,7 @@ export async function createTask(actorUserId: string, actorRole: "CLIENT" | "ADM
     ? displayToMinorUnits(data.customRewardAmount)
     : BigInt(settings.defaultScannerReward);
   const now = new Date();
-  const claimExpiresAt = new Date(now.getTime() + settings.taskClaimWindowSeconds * 1000);
+  const claimExpiresAt = new Date(now.getTime() + UNCLAIMED_TASK_REFUND_SECONDS * 1000);
   const result = await prisma.$transaction(async (tx) => {
     const client = actorRole === "CLIENT"
       ? await tx.clientProfile.findUnique({ where: { userId: actorUserId } })
@@ -168,7 +170,7 @@ export async function createTask(actorUserId: string, actorRole: "CLIENT" | "ADM
       rewardSource: actorRole === "ADMIN" && data.customRewardAmount ? "ADMIN_CUSTOM" : "DEFAULT",
       now,
       claimExpiresAt,
-      taskClaimWindowSeconds: settings.taskClaimWindowSeconds,
+      taskClaimWindowSeconds: UNCLAIMED_TASK_REFUND_SECONDS,
       taskCompletionWindowSeconds: settings.taskCompletionWindowSeconds,
       clientReviewWindowSeconds: settings.clientReviewWindowSeconds
     });
@@ -183,7 +185,7 @@ export async function createBulkTasks(actorUserId: string, actorRole: "CLIENT" |
   const normalizedUrls = data.urls.map((url) => ({ url, normalized: normalizeTaskInput(url, settings.blockedDomains) }));
   const rewardAmount = BigInt(settings.defaultScannerReward);
   const now = new Date();
-  const claimExpiresAt = new Date(now.getTime() + settings.taskClaimWindowSeconds * 1000);
+  const claimExpiresAt = new Date(now.getTime() + UNCLAIMED_TASK_REFUND_SECONDS * 1000);
   const tasks = await prisma.$transaction(async (tx) => {
     const client = actorRole === "CLIENT"
       ? await tx.clientProfile.findUnique({ where: { userId: actorUserId }, include: { creditAccount: true } })
@@ -208,7 +210,7 @@ export async function createBulkTasks(actorUserId: string, actorRole: "CLIENT" |
         rewardSource: "DEFAULT",
         now,
         claimExpiresAt,
-        taskClaimWindowSeconds: settings.taskClaimWindowSeconds,
+        taskClaimWindowSeconds: UNCLAIMED_TASK_REFUND_SECONDS,
         taskCompletionWindowSeconds: settings.taskCompletionWindowSeconds,
         clientReviewWindowSeconds: settings.clientReviewWindowSeconds
       }));
@@ -226,11 +228,6 @@ export async function claimTask(userId: string, taskId: string) {
   if (!scanner || scanner.status !== "ACTIVE") throw new DomainError("FORBIDDEN", "Scanner profile is not active.", 403);
   if (!isScannerRecentlyOnline(scanner)) throw new DomainError("SCANNER_OFFLINE", "Go online before grabbing tasks.", 409);
   const claimed = await prisma.$transaction(async (tx) => {
-    const active = await tx.task.findFirst({
-      where: { assignedScannerId: scanner.id, status: { in: ["CLAIMED", "SCANNER_SUBMITTED", "DISPUTED"] } },
-      select: { id: true }
-    });
-    if (active) throw new DomainError("SCANNER_ALREADY_HAS_ACTIVE_TASK", "You already have an active task.", 409);
     const now = new Date();
     const task = await tx.task.findUnique({ where: { id: taskId } });
     if (!task) throw new DomainError("TASK_ALREADY_CLAIMED", "This task is no longer available.", 409);

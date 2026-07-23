@@ -7,16 +7,16 @@ import { api } from "../../../lib/api";
 import { useLiveRefresh } from "../../../lib/live";
 
 export default function CurrentTaskPage() {
-  const [task, setTask] = useState<any>(null);
-  const [proof, setProof] = useState<File | null>(null);
+  const [tasks, setTasks] = useState<any[]>([]);
+  const [proofs, setProofs] = useState<Record<string, File | null>>({});
   const [message, setMessage] = useState("");
-  const [submitting, setSubmitting] = useState(false);
+  const [submittingTaskId, setSubmittingTaskId] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const [serverOffset, setServerOffset] = useState(0);
 
   const loadTask = useCallback(async () => {
-    const data = await api<{ task: any; serverTime: string }>("/scanner/current-task");
-    setTask(data.task);
+    const data = await api<{ task: any; tasks?: any[]; serverTime: string }>("/scanner/current-task");
+    setTasks(data.tasks ?? (data.task ? [data.task] : []));
     setServerOffset(new Date(data.serverTime).getTime() - Date.now());
   }, []);
 
@@ -31,30 +31,36 @@ export default function CurrentTaskPage() {
     return () => window.clearInterval(clock);
   }, [serverOffset]);
 
-  async function submit() {
-    if (!task || submitting || task.status !== "CLAIMED" || !proof) return;
-    setSubmitting(true);
+  async function submit(task: any) {
+    const proof = proofs[task.id];
+    if (!task || submittingTaskId || task.status !== "CLAIMED" || !proof) return;
+    setSubmittingTaskId(task.id);
     try {
       const formData = new FormData();
       formData.append("proof", proof);
       const updated = await api(`/tasks/${task.id}/submit`, { method: "POST", body: formData });
-      setTask(updated);
+      setTasks((current) => current.map((item) => item.id === task.id ? updated : item));
+      setProofs((current) => ({ ...current, [task.id]: null }));
       setMessage("Submitted for client review.");
     } catch (e) {
       setMessage(e instanceof Error ? e.message : "Submit failed");
-      setSubmitting(false);
+    } finally {
+      setSubmittingTaskId(null);
     }
   }
-  const canSubmit = task?.status === "CLAIMED" && !submitting && Boolean(proof);
   return (
     <AppShell role="scanner">
       <div className="app-page">
         <section>
           <p className="app-eyebrow">Active work</p>
-          <h1 className="app-title">Current task</h1>
+          <h1 className="app-title">Current tasks</h1>
         </section>
-        {task ? (
-          <div className="app-card">
+        {tasks.length > 0 ? tasks.map((task) => {
+          const proof = proofs[task.id];
+          const submitting = submittingTaskId === task.id;
+          const canSubmit = task.status === "CLAIMED" && !submittingTaskId && Boolean(proof);
+          return (
+          <div key={task.id} className="app-card">
             <div className="grid min-w-0 gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-start">
               <div className="min-w-0">
                 <h2 className="font-mono text-sm font-semibold text-slate-500">{task.publicId}</h2>
@@ -76,14 +82,21 @@ export default function CurrentTaskPage() {
               <FileImage className="text-accent" size={28} />
               <span className="break-safe mt-3 max-w-full text-sm font-semibold text-ink">{proof ? proof.name : "Upload proof image or PDF"}</span>
               <span className="mt-1 text-xs text-slate-500">JPG, PNG, WEBP, or PDF up to 5 MB</span>
-              <input disabled={task.status !== "CLAIMED" || submitting} type="file" accept="image/jpeg,image/png,image/webp,application/pdf" className="sr-only" onChange={(event) => setProof(event.target.files?.[0] ?? null)} />
+              <input
+                disabled={task.status !== "CLAIMED" || submitting}
+                type="file"
+                accept="image/jpeg,image/png,image/webp,application/pdf"
+                className="sr-only"
+                onChange={(event) => setProofs((current) => ({ ...current, [task.id]: event.target.files?.[0] ?? null }))}
+              />
             </label>
-            <button disabled={!canSubmit} onClick={submit} className="focus-ring mt-4 w-full rounded-lg bg-accent px-5 py-4 font-semibold text-white shadow-glow disabled:cursor-not-allowed disabled:opacity-60">
+            <button disabled={!canSubmit} onClick={() => submit(task)} className="focus-ring mt-4 w-full rounded-lg bg-accent px-5 py-4 font-semibold text-white shadow-glow disabled:cursor-not-allowed disabled:opacity-60">
               {submitting ? "Submitting..." : task.status === "CLAIMED" ? "Submit Proof and Mark Done" : "Already Submitted"}
             </button>
           </div>
-        ) : (
-          <p className="rounded-2xl border border-line bg-white p-6 text-slate-500 shadow-sm">No active claimed task.</p>
+          );
+        }) : (
+          <p className="rounded-2xl border border-line bg-white p-6 text-slate-500 shadow-sm">No active claimed tasks.</p>
         )}
         {message && <p className="rounded-lg border border-line bg-slate-50 px-4 py-3 text-sm text-slate-600">{message}</p>}
       </div>
