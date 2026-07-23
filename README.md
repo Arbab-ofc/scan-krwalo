@@ -144,6 +144,7 @@ Admin:
 - `POST /api/v1/admin/payouts/:id/reject`
 - `GET /api/v1/admin/settings`
 - `PATCH /api/v1/admin/settings`
+- `POST /api/v1/admin/notifications/test-push`
 - `GET /api/v1/admin/telegram/webhook`
 - `POST /api/v1/admin/telegram/webhook`
 - `GET /api/v1/admin/audit-logs`

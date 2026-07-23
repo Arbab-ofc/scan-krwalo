@@ -39,6 +39,7 @@ export default function AdminSettingsPage() {
   const [saving, setSaving] = useState(false);
   const [installingWebhook, setInstallingWebhook] = useState(false);
   const [checkingWebhook, setCheckingWebhook] = useState(false);
+  const [sendingTestPush, setSendingTestPush] = useState(false);
   const [webhookInfo, setWebhookInfo] = useState<TelegramWebhookInfo | null>(null);
 
   function settingsPayload() {
@@ -122,6 +123,24 @@ export default function AdminSettingsPage() {
       setMessage(error instanceof Error ? error.message : "Could not check Telegram webhook.");
     } finally {
       setCheckingWebhook(false);
+    }
+  }
+
+  async function sendTestPushToAllUsers() {
+    setSendingTestPush(true);
+    setMessage("");
+    try {
+      const result = await api<{ configured: boolean; attempted: number; sent: number; failed: number; errors: string[]; messageIds: string[] }>("/admin/notifications/test-push", {
+        method: "POST",
+        body: "{}"
+      });
+      if (!result.configured) setMessage("OneSignal is not configured on the API server.");
+      else if (result.failed > 0) setMessage(`OneSignal test push attempted for ${result.attempted} users. Failed: ${result.failed}. ${result.errors[0] ?? ""}`);
+      else setMessage(`OneSignal test push sent to ${result.sent} users. Message IDs: ${result.messageIds.join(", ") || "none"}`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not send OneSignal test push.");
+    } finally {
+      setSendingTestPush(false);
     }
   }
 
@@ -233,6 +252,19 @@ export default function AdminSettingsPage() {
                 </div>
               )}
             </div>
+          </div>
+          <div className="mt-2 rounded-xl border border-line bg-slate-50 p-4">
+            <div className="flex items-start gap-3">
+              <span className="rounded-lg bg-white p-2 text-accent"><RadioTower size={19} /></span>
+              <div>
+                <h2 className="font-semibold text-ink">OneSignal web push</h2>
+                <p className="mt-1 text-sm leading-6 text-slate-600">Send one test browser notification to every user with a OneSignal external ID subscription.</p>
+              </div>
+            </div>
+            <button type="button" onClick={sendTestPushToAllUsers} disabled={sendingTestPush} className="focus-ring mt-4 inline-flex w-full items-center justify-center gap-2 rounded-md border border-line bg-white px-5 py-3 font-semibold text-ink disabled:cursor-not-allowed disabled:opacity-70 sm:w-auto">
+              <RadioTower size={18} />
+              {sendingTestPush ? "Sending..." : "Send test to every user"}
+            </button>
           </div>
           <button disabled={saving} className="focus-ring inline-flex items-center justify-center gap-2 rounded-md bg-accent px-5 py-3 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-70">
             <Save size={18} />

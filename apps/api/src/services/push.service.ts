@@ -53,6 +53,23 @@ export async function sendPushNotificationNow(userId: string, payload: PushPaylo
   };
 }
 
+export async function sendPushNotificationToUsers(userIds: string[], payload: PushPayload) {
+  if (!pushConfigured) return { configured: false, attempted: userIds.length, sent: 0, failed: 0, errors: [] as string[], messageIds: [] as string[] };
+  const batches = chunk(userIds, 20_000);
+  const results = await Promise.all(batches.map((batch) => sendOneSignalPush(batch, payload)));
+  const sent = results.reduce((total, result, index) => total + (result.sent ? (batches[index]?.length ?? 0) : 0), 0);
+  const failed = results.reduce((total, result, index) => total + (!result.sent ? (batches[index]?.length ?? 0) : 0), 0);
+  return {
+    configured: true,
+    attempted: userIds.length,
+    sent,
+    failed,
+    errors: results.filter((result) => !result.sent).map((result) => result.error ?? "OneSignal did not accept the push notification.").slice(0, 5),
+    messageIds: results.map((result) => result.id).filter((id): id is string => Boolean(id)),
+    warnings: results.map((result) => result.warnings).filter(Boolean)
+  };
+}
+
 async function sendOneSignalPush(externalUserIds: string[], payload: PushPayload) {
   if (!pushConfigured || externalUserIds.length === 0) return { sent: false, error: "OneSignal is not configured." };
   const response = await fetch("https://api.onesignal.com/notifications?c=push", {
@@ -76,6 +93,12 @@ async function sendOneSignalPush(externalUserIds: string[], payload: PushPayload
     return { sent: false, error: oneSignalErrorMessage(response.status, body) };
   }
   return { sent: true, id: body.id, warnings: body.warnings };
+}
+
+function chunk<T>(items: T[], size: number) {
+  const chunks: T[][] = [];
+  for (let index = 0; index < items.length; index += size) chunks.push(items.slice(index, index + size));
+  return chunks;
 }
 
 function absoluteUrl(url?: string) {

@@ -4,6 +4,7 @@ import { requireRole } from "../authz.js";
 import { ok } from "../http.js";
 import { createActivationCode, getActivationCode, listActivationCodes } from "../services/activation.service.js";
 import { transitionPayout } from "../services/payouts.service.js";
+import { sendPushNotificationToUsers } from "../services/push.service.js";
 import { getPagination, paginated } from "../pagination.js";
 import { DomainError, minorUnitsToDisplay } from "@scan-krwalo/shared";
 
@@ -51,6 +52,24 @@ export async function registerAdminRoutes(app: FastifyInstance) {
     await requireRole(request, ["ADMIN"]);
     const [users, tasks, payouts] = await Promise.all([prisma.user.count(), prisma.task.count(), prisma.payoutRequest.count({ where: { status: "REQUESTED" } })]);
     return ok(reply, { users, tasks, requestedPayouts: payouts });
+  });
+  app.post("/notifications/test-push", async (request, reply) => {
+    await requireRole(request, ["ADMIN"]);
+    const users = await prisma.user.findMany({ select: { id: true } });
+    const result = await sendPushNotificationToUsers(users.map((user) => user.id), {
+      title: "Scan Krwalo test",
+      body: "This is a platform-wide OneSignal test notification.",
+      url: "/notifications",
+      tag: "admin-test-push"
+    });
+    await prisma.auditLog.create({
+      data: {
+        action: "ADMIN_TEST_PUSH_SENT",
+        entityType: "Notification",
+        metadata: result as Prisma.InputJsonObject
+      }
+    });
+    return ok(reply, result);
   });
   app.post("/activation-codes/scanner", async (request, reply) => {
     const user = await requireRole(request, ["ADMIN"]);
