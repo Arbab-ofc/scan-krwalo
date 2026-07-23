@@ -269,7 +269,7 @@ OneSignal web push alerts:
 
 1. Create a OneSignal Web Push app for the exact production site origin.
 2. Set `ONESIGNAL_APP_ID` and `ONESIGNAL_REST_API_KEY` on the API deployment.
-3. Confirm `https://your-web-domain.com/push/onesignal/OneSignalSDKWorker.js` is publicly accessible.
+3. Confirm `https://your-web-domain.com/OneSignalSDKWorker.js` is publicly accessible.
 4. Scanners click **Enable push notifications** from the scanner dashboard. The browser is linked to the app user ID through OneSignal `external_id`.
 
 Telegram scanner alerts:

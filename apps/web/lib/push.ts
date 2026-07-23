@@ -14,8 +14,6 @@ type OneSignalSdk = {
     autoResubscribe?: boolean;
     notificationClickHandlerMatch?: string;
     notificationClickHandlerAction?: string;
-    serviceWorkerPath?: string;
-    serviceWorkerParam?: { scope: string };
   }): Promise<void>;
   login?: (externalId: string) => Promise<void>;
   Notifications?: {
@@ -114,9 +112,7 @@ function initOneSignal(appId: string) {
           appId,
           autoResubscribe: true,
           notificationClickHandlerMatch: "origin",
-          notificationClickHandlerAction: "navigate",
-          serviceWorkerPath: "push/onesignal/OneSignalSDKWorker.js",
-          serviceWorkerParam: { scope: "/push/onesignal/" }
+          notificationClickHandlerAction: "navigate"
         });
         settled = true;
         resolve(OneSignal);
