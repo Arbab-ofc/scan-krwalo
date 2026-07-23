@@ -1,6 +1,7 @@
-import { prisma, type NotificationType } from "@scan-krwalo/database";
-import { enqueuePushNotification } from "./push.service.js";
+import { Prisma, prisma, type NotificationType } from "@scan-krwalo/database";
+import { sendPushNotificationToUsers } from "./push.service.js";
 import { sendTaskTelegramNotification } from "./telegram.service.js";
+import { getSettings } from "./settings.service.js";
 
 export async function notifyUser(input: {
   userId: string;
@@ -38,12 +39,21 @@ export async function notifyEligibleOnlineScannersForTask(taskId: string) {
       payload: { taskId: task.id, publicId: task.publicId }
     }))
   }) : { count: 0 };
-  await Promise.all(scanners.map((scanner) => enqueuePushNotification(scanner.userId, {
-    title: "New task available",
-    body: `${task.publicId} is ready to grab.`,
-    url: "/scanner/live-tasks",
-    tag: `task:${task.id}`
-  })));
+  let pushResult: unknown = null;
+  try {
+    const settings = await getSettings();
+    if (settings.browserPushEnabled) {
+      pushResult = await sendPushNotificationToUsers(scanners.map((scanner) => scanner.userId), {
+        title: "New task available",
+        body: `${task.publicId} is ready to grab.`,
+        url: `/scanner/live-tasks?task=${encodeURIComponent(task.publicId)}`,
+        tag: `task:${task.id}`
+      });
+    }
+  } catch (error) {
+    console.error("Failed to send Firebase task notifications", { taskId, error });
+    pushResult = { error: error instanceof Error ? error.message : "Unknown Firebase error" };
+  }
   const telegramResults = await Promise.all(scanners
     .filter((scanner): scanner is { userId: string; telegramChatId: string } => Boolean(scanner.telegramChatId))
     .map(async (scanner) => {
@@ -69,7 +79,8 @@ export async function notifyEligibleOnlineScannersForTask(taskId: string) {
         scannerCount: scanners.length,
         telegramCount: scanners.filter((scanner) => scanner.telegramChatId).length,
         telegramSentCount: telegramResults.filter((result) => result.sent).length,
-        telegramFailed: telegramResults.filter((result) => !result.sent).slice(0, 5)
+        telegramFailed: telegramResults.filter((result) => !result.sent).slice(0, 5),
+        pushResult: pushResult as Prisma.InputJsonValue
       }
     }
   });

@@ -188,13 +188,13 @@ export async function sendTaskTelegramNotification(input: {
   title?: string | null;
   normalizedUrl: string;
 }) {
-  const taskUrl = `${env.WEB_URL.replace(/\/$/, "")}/scanner/live-tasks`;
+  const taskUrl = `${env.WEB_URL.replace(/\/$/, "")}/scanner/live-tasks?task=${encodeURIComponent(input.publicId)}`;
   const title = input.title ? `\n${input.title}` : "";
   await sendTelegramMessage(
     input.chatId,
-    `New task available\n${input.publicId}${title}\n${input.normalizedUrl}\n\nOpen live tasks, go online if needed, and grab it before the timer ends.`,
+    `New task available\n${input.publicId}${title}\nTask: ${input.normalizedUrl}\n\nOpen the grab link before the 2-minute timer ends.`,
     {
-      inline_keyboard: [[{ text: "Open live tasks", url: taskUrl }]]
+      inline_keyboard: [[{ text: "Grab task", url: taskUrl }]]
     }
   );
 }
