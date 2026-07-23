@@ -6,6 +6,7 @@ import { ArrowRight, LockKeyhole, Mail, Radar, ShieldCheck, Sparkles, UserPlus }
 import { api, getToken, storeAuthTokens } from "../../lib/api";
 import { dashboardPathForUser } from "../../lib/auth-routing";
 import { PublicFrame } from "../../components/shell";
+import { useLocale } from "../../lib/i18n";
 
 type LoginResult = {
   accessToken: string;
@@ -14,6 +15,7 @@ type LoginResult = {
 };
 
 export default function LoginPage() {
+  const { t } = useLocale();
   const [error, setError] = useState("");
   const [checkingSession, setCheckingSession] = useState(true);
   const [isPending, startTransition] = useTransition();
@@ -55,8 +57,8 @@ export default function LoginPage() {
       {checkingSession ? (
         <div className="mx-auto grid min-h-[60vh] max-w-md place-items-center">
           <div className="w-full rounded-2xl border border-line bg-white p-6 text-center shadow-glow">
-            <h1 className="text-2xl font-semibold text-ink">Opening dashboard</h1>
-            <p className="mt-2 text-sm text-slate-600">Checking your active session...</p>
+            <h1 className="text-2xl font-semibold text-ink">{t("login.opening")}</h1>
+            <p className="mt-2 text-sm text-slate-600">{t("login.checking")}</p>
           </div>
         </div>
       ) : (
@@ -73,12 +75,12 @@ export default function LoginPage() {
               </Link>
 
               <div className="mt-16 max-w-xl">
-                <p className="text-sm font-semibold uppercase tracking-[.2em] text-accent">Secure access</p>
+                <p className="text-sm font-semibold uppercase tracking-[.2em] text-accent">{t("login.secureAccess")}</p>
                 <h1 className="mt-4 text-4xl font-semibold tracking-tight text-ink sm:text-5xl">
-                  Login and continue your workflow.
+                  {t("login.heroTitle")}
                 </h1>
                 <p className="mt-5 max-w-lg text-base leading-7 text-slate-600">
-                  Clients post verified URL tasks, Scanners claim live work, and Admins manage credits, rewards, payouts, and settings.
+                  {t("login.heroCopy")}
                 </p>
               </div>
             </div>
@@ -94,24 +96,24 @@ export default function LoginPage() {
         <div className="flex items-center p-6 sm:p-8 lg:p-12">
           <form action={submit} className="w-full">
             <div className="mb-8">
-              <p className="text-sm font-semibold uppercase tracking-[.18em] text-accent">Welcome back</p>
-              <h2 className="mt-2 text-3xl font-semibold tracking-tight text-ink">Sign in to your account</h2>
+              <p className="text-sm font-semibold uppercase tracking-[.18em] text-accent">{t("login.welcome")}</p>
+              <h2 className="mt-2 text-3xl font-semibold tracking-tight text-ink">{t("login.title")}</h2>
               <p className="mt-2 text-sm leading-6 text-slate-600">
-                Use your username or email address. Your dashboard opens based on your saved role.
+                {t("login.copy")}
               </p>
             </div>
 
             <div className="grid gap-4">
               <Field
                 name="identifier"
-                label="Username or email"
+                label={t("login.identifier")}
                 placeholder="you@example.com"
                 icon={<Mail size={17} />}
               />
               <Field
                 name="password"
-                label="Password"
-                placeholder="Enter your password"
+                label={t("login.password")}
+                placeholder={t("login.enterPassword")}
                 type="password"
                 icon={<LockKeyhole size={17} />}
               />
@@ -120,10 +122,10 @@ export default function LoginPage() {
             <div className="mt-4 flex items-center justify-between gap-4 text-sm">
               <label className="flex items-center gap-2 text-slate-600">
                 <input type="checkbox" className="h-4 w-4 rounded border-line text-accent focus:ring-accent" />
-                Remember me
+                {t("login.remember")}
               </label>
               <Link href="/support" className="font-semibold text-accent hover:underline">
-                Need help?
+                {t("login.needHelp")}
               </Link>
             </div>
 
@@ -137,14 +139,14 @@ export default function LoginPage() {
               disabled={isPending}
               className="focus-ring mt-6 inline-flex h-13 w-full items-center justify-center gap-2 rounded-lg bg-accent px-5 py-4 font-semibold text-white shadow-glow transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-70"
             >
-              {isPending ? "Signing in..." : "Login"}
+              {isPending ? t("login.signingIn") : t("login.button")}
               <ArrowRight size={18} />
             </button>
 
             <p className="mt-5 text-center text-sm text-slate-500">
-              New to Scan Krwalo?{" "}
+              {t("login.newUser")} {" "}
               <Link href="/signup" className="font-semibold text-accent hover:underline">
-                Create an account
+                {t("login.createAccount")}
               </Link>
             </p>
           </form>

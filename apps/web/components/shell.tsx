@@ -6,16 +6,19 @@ import { Bell, Menu, Radar, WalletCards, X } from "lucide-react";
 import { AuthNav, SidebarLogoutButton } from "./auth-nav";
 import { api } from "../lib/api";
 import { getLiveSocket } from "../lib/live";
+import { LanguageSwitcher, useLocale } from "../lib/i18n";
 
 export function PublicNav() {
   const [open, setOpen] = useState(false);
+  const { t } = useLocale();
   return (
     <header className="sticky top-0 z-20 border-b border-line bg-white/90 backdrop-blur">
       <nav className="mx-auto flex h-16 max-w-6xl items-center justify-between px-5">
         <Link href="/" className="text-lg font-semibold tracking-wide text-ink">Scan Krwalo</Link>
         <div className="hidden items-center gap-2 text-sm text-slate-600 md:flex">
-          <Link className="hidden rounded px-3 py-2 hover:text-ink sm:block" href="/how-it-works">How it works</Link>
-          <Link className="hidden rounded px-3 py-2 hover:text-ink sm:block" href="/api-docs">API docs</Link>
+          <Link className="hidden rounded px-3 py-2 hover:text-ink sm:block" href="/how-it-works">{t("nav.howItWorks")}</Link>
+          <Link className="hidden rounded px-3 py-2 hover:text-ink sm:block" href="/api-docs">{t("nav.apiDocs")}</Link>
+          <LanguageSwitcher />
           <AuthNav />
         </div>
         <button
@@ -31,9 +34,10 @@ export function PublicNav() {
       {open && (
         <div className="border-t border-line bg-white px-5 py-4 shadow-sm md:hidden">
           <div className="mx-auto grid max-w-6xl gap-2 text-sm">
-            <Link onClick={() => setOpen(false)} className="rounded-lg px-3 py-3 font-medium text-slate-600 hover:bg-emerald-50 hover:text-ink" href="/how-it-works">How it works</Link>
-            <Link onClick={() => setOpen(false)} className="rounded-lg px-3 py-3 font-medium text-slate-600 hover:bg-emerald-50 hover:text-ink" href="/api-docs">API docs</Link>
-            <Link onClick={() => setOpen(false)} className="rounded-lg px-3 py-3 font-medium text-slate-600 hover:bg-emerald-50 hover:text-ink" href="/support">Support</Link>
+            <Link onClick={() => setOpen(false)} className="rounded-lg px-3 py-3 font-medium text-slate-600 hover:bg-emerald-50 hover:text-ink" href="/how-it-works">{t("nav.howItWorks")}</Link>
+            <Link onClick={() => setOpen(false)} className="rounded-lg px-3 py-3 font-medium text-slate-600 hover:bg-emerald-50 hover:text-ink" href="/api-docs">{t("nav.apiDocs")}</Link>
+            <Link onClick={() => setOpen(false)} className="rounded-lg px-3 py-3 font-medium text-slate-600 hover:bg-emerald-50 hover:text-ink" href="/support">{t("nav.support")}</Link>
+            <LanguageSwitcher />
             <div className="border-t border-line pt-3"><AuthNav /></div>
           </div>
         </div>
@@ -43,6 +47,7 @@ export function PublicNav() {
 }
 
 export function PublicFooter() {
+  const { t } = useLocale();
   return (
     <footer className="border-t border-line bg-white">
       <div className="mx-auto grid max-w-6xl gap-8 px-5 py-10 sm:grid-cols-[1.2fr_.8fr_.8fr]">
@@ -52,23 +57,23 @@ export function PublicFooter() {
             Scan Krwalo
           </div>
           <p className="mt-3 max-w-sm text-sm leading-6 text-slate-600">
-            Post tasks, grab work in realtime, complete with proof, and settle through tracked credits and wallet ledgers.
+            {t("footer.description")}
           </p>
         </div>
         <div>
-          <h2 className="text-sm font-semibold text-ink">Platform</h2>
+          <h2 className="text-sm font-semibold text-ink">{t("footer.platform")}</h2>
           <div className="mt-3 grid gap-2 text-sm text-slate-600">
-            <Link href="/how-it-works" className="hover:text-ink">How it works</Link>
-            <Link href="/api-docs" className="hover:text-ink">API docs</Link>
-            <Link href="/signup" className="hover:text-ink">Create account</Link>
+            <Link href="/how-it-works" className="hover:text-ink">{t("nav.howItWorks")}</Link>
+            <Link href="/api-docs" className="hover:text-ink">{t("nav.apiDocs")}</Link>
+            <Link href="/signup" className="hover:text-ink">{t("footer.createAccount")}</Link>
           </div>
         </div>
         <div>
-          <h2 className="text-sm font-semibold text-ink">Legal</h2>
+          <h2 className="text-sm font-semibold text-ink">{t("footer.legal")}</h2>
           <div className="mt-3 grid gap-2 text-sm text-slate-600">
-            <Link href="/terms" className="hover:text-ink">Terms</Link>
-            <Link href="/privacy" className="hover:text-ink">Privacy</Link>
-            <Link href="/support" className="hover:text-ink">Support</Link>
+            <Link href="/terms" className="hover:text-ink">{t("footer.terms")}</Link>
+            <Link href="/privacy" className="hover:text-ink">{t("footer.privacy")}</Link>
+            <Link href="/support" className="hover:text-ink">{t("nav.support")}</Link>
           </div>
         </div>
       </div>
@@ -91,13 +96,14 @@ export function PublicFrame({ children, className = "" }: { children: React.Reac
 
 export function AppShell({ children, role }: { children: React.ReactNode; role: "scanner" | "client" | "admin" | "user" }) {
   const [open, setOpen] = useState(false);
+  const { t } = useLocale();
   const links: Array<[string, string]> = role === "scanner"
-    ? [["/scanner", "Overview"], ["/scanner/live-tasks", "Live"], ["/scanner/current-task", "Current"], ["/scanner/history", "History"], ["/scanner/payouts", "Payouts"], ["/scanner/payout-settings", "Settings"]]
+    ? [["/scanner", t("nav.overview")], ["/scanner/live-tasks", t("nav.live")], ["/scanner/current-task", t("nav.current")], ["/scanner/history", t("nav.history")], ["/scanner/payouts", t("nav.payouts")], ["/scanner/payout-settings", t("nav.settings")]]
     : role === "client"
-      ? [["/client", "Overview"], ["/client/post-task", "Post"], ["/client/tasks", "Tasks"], ["/client/credits", "Credits"]]
+      ? [["/client", t("nav.overview")], ["/client/post-task", t("nav.post")], ["/client/tasks", t("nav.tasks")], ["/client/credits", t("nav.credits")]]
       : role === "admin"
-        ? [["/admin", "Overview"], ["/admin/users", "Users"], ["/admin/tasks", "Tasks"], ["/admin/reports", "Reports"], ["/admin/activation-codes", "Codes"], ["/admin/payouts", "Payouts"], ["/admin/settings", "Settings"]]
-        : [["/activate", "Activate"], ["/profile", "Profile"], ["/support", "Support"]];
+        ? [["/admin", t("nav.overview")], ["/admin/users", t("nav.users")], ["/admin/tasks", t("nav.tasks")], ["/admin/reports", t("nav.reports")], ["/admin/activation-codes", t("nav.codes")], ["/admin/payouts", t("nav.payouts")], ["/admin/settings", t("nav.settings")]]
+        : [["/activate", t("nav.activate")], ["/profile", t("nav.profile")], ["/support", t("nav.support")]];
   return (
     <div className="min-h-screen bg-surface text-ink">
       <ScannerPresenceHeartbeat role={role} />
@@ -128,7 +134,8 @@ export function AppShell({ children, role }: { children: React.ReactNode; role: 
           {links.map(([href, label]) => (
             <Link onClick={() => setOpen(false)} key={href} href={href} className="focus-ring block rounded-md px-3 py-3 text-sm font-medium text-slate-600 hover:bg-emerald-50 hover:text-ink">{label}</Link>
           ))}
-          <Link onClick={() => setOpen(false)} href="/notifications" className="focus-ring block rounded-md px-3 py-3 text-sm font-medium text-slate-600 hover:bg-emerald-50 hover:text-ink"><Bell className="mr-2 inline" size={16} /> <span>Notifications</span></Link>
+          <Link onClick={() => setOpen(false)} href="/notifications" className="focus-ring block rounded-md px-3 py-3 text-sm font-medium text-slate-600 hover:bg-emerald-50 hover:text-ink"><Bell className="mr-2 inline" size={16} /> <span>{t("nav.notifications")}</span></Link>
+          <div className="mt-2 border-t border-line pt-3"><LanguageSwitcher /></div>
           <SidebarLogoutButton />
         </nav>
       </aside>
