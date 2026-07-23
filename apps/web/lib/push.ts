@@ -9,7 +9,14 @@ type PushConfig = {
 };
 
 type OneSignalSdk = {
-  init(options: { appId: string; autoResubscribe?: boolean; notificationClickHandlerMatch?: string; notificationClickHandlerAction?: string }): Promise<void>;
+  init(options: {
+    appId: string;
+    autoResubscribe?: boolean;
+    notificationClickHandlerMatch?: string;
+    notificationClickHandlerAction?: string;
+    serviceWorkerPath?: string;
+    serviceWorkerParam?: { scope: string };
+  }): Promise<void>;
   login?: (externalId: string) => Promise<void>;
   Notifications?: {
     requestPermission(): Promise<boolean>;
@@ -43,6 +50,7 @@ export async function enablePushNotifications() {
       throw new Error("OneSignal push notifications are not configured on the API server. Set ONESIGNAL_APP_ID and ONESIGNAL_REST_API_KEY on Render, then redeploy.");
     }
     const me = await api<{ user: { id: string; role: string } }>("/auth/me");
+    await unregisterLegacyPushWorker();
     const oneSignal = await initOneSignal(config.appId);
     assertOneSignalReady(oneSignal);
     if (!oneSignal.Notifications.isPushSupported()) {
@@ -73,6 +81,16 @@ export async function enablePushNotifications() {
   }
 }
 
+async function unregisterLegacyPushWorker() {
+  if (!("serviceWorker" in navigator)) return;
+  const registrations = await navigator.serviceWorker.getRegistrations();
+  await Promise.all(registrations.map(async (registration) => {
+    if (registration.active?.scriptURL.endsWith("/push-sw.js") || registration.installing?.scriptURL.endsWith("/push-sw.js") || registration.waiting?.scriptURL.endsWith("/push-sw.js")) {
+      await registration.unregister();
+    }
+  }));
+}
+
 export async function sendTestPushNotification() {
   return api<{ configured: boolean; attempted: number; sent: number; removed: number; failed: number; errors: string[]; provider?: string; messageId?: string | null; warnings?: unknown }>("/push-subscriptions/test", {
     method: "POST"
@@ -96,7 +114,9 @@ function initOneSignal(appId: string) {
           appId,
           autoResubscribe: true,
           notificationClickHandlerMatch: "origin",
-          notificationClickHandlerAction: "navigate"
+          notificationClickHandlerAction: "navigate",
+          serviceWorkerPath: "push/onesignal/OneSignalSDKWorker.js",
+          serviceWorkerParam: { scope: "/push/onesignal/" }
         });
         settled = true;
         resolve(OneSignal);

@@ -11,6 +11,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" suppressHydrationWarning>
       <body>
+        <Script id="onesignal-deferred" strategy="beforeInteractive">
+          {`window.OneSignalDeferred = window.OneSignalDeferred || [];`}
+        </Script>
         <Script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" strategy="afterInteractive" />
         {children}
       </body>
