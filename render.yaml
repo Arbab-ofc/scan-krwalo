@@ -15,9 +15,9 @@ services:
       - key: RUN_WORKER_IN_API
         value: "true"
       - key: JWT_ACCESS_EXPIRES_IN
-        value: 15m
+        value: 15d
       - key: JWT_REFRESH_EXPIRES_IN
-        value: 30d
+        value: 15d
       - key: S3_FORCE_PATH_STYLE
         value: "true"
       - key: WEB_URL

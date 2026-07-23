@@ -1,11 +1,12 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api/v1";
+let refreshPromise: Promise<boolean> | null = null;
 
 export function getToken() {
   if (typeof window === "undefined") return null;
   return window.localStorage.getItem("accessToken");
 }
 
-export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
+export async function api<T>(path: string, init: RequestInit = {}, options: { allowRefresh?: boolean } = {}): Promise<T> {
   const token = getToken();
   const isFormData = typeof FormData !== "undefined" && init.body instanceof FormData;
   const response = await fetch(`${API_URL}${path}`, {
@@ -17,6 +18,9 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
     },
     cache: "no-store"
   });
+  if (response.status === 401 && options.allowRefresh !== false && path !== "/auth/refresh" && await refreshAccessToken()) {
+    return api<T>(path, init, { allowRefresh: false });
+  }
   const payload = await response.json().catch(() => ({
     success: false,
     error: { message: "Server response was not valid JSON." }
@@ -29,6 +33,31 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
     throw new Error(`${message} (${response.status} ${path})`);
   }
   return payload.data as T;
+}
+
+async function refreshAccessToken() {
+  if (refreshPromise) return refreshPromise;
+  const refreshToken = getRefreshToken();
+  if (!refreshToken) return false;
+  refreshPromise = (async () => {
+    try {
+      const response = await fetch(`${API_URL}/auth/refresh`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ refreshToken }),
+        cache: "no-store"
+      });
+      const payload = await response.json().catch(() => null) as { success?: boolean; data?: { accessToken?: string; refreshToken?: string } } | null;
+      if (!response.ok || !payload?.success || !payload.data?.accessToken || !payload.data.refreshToken) return false;
+      storeAuthTokens(payload.data.accessToken, payload.data.refreshToken);
+      return true;
+    } catch {
+      return false;
+    } finally {
+      refreshPromise = null;
+    }
+  })();
+  return refreshPromise;
 }
 
 function formatErrorMessage(message: string, details: unknown) {

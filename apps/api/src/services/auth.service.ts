@@ -7,6 +7,8 @@ function hashToken(token: string) {
   return createHash("sha256").update(token).digest("hex");
 }
 
+const REFRESH_SESSION_TTL_MS = 15 * 24 * 60 * 60 * 1000;
+
 export async function signup(input: unknown) {
   const data = signupSchema.parse(input);
   const existing = await prisma.user.findFirst({
@@ -81,7 +83,7 @@ export async function login(input: unknown, meta: { userAgent?: string; ipAddres
       tokenHash: hashToken(refreshToken),
       userAgent: meta.userAgent,
       ipAddress: meta.ipAddress,
-      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+      expiresAt: new Date(Date.now() + REFRESH_SESSION_TTL_MS)
     }
   });
   return {
