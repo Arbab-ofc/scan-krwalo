@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { ok } from "../http.js";
-import { getTelegramBotConfig, handleTelegramWebhook } from "../services/telegram.service.js";
+import { getTelegramBotConfig, handleTelegramWebhook, recordTelegramWebhookEvent } from "../services/telegram.service.js";
 import { DomainError } from "@scan-krwalo/shared";
 
 export async function registerTelegramRoutes(app: FastifyInstance) {
@@ -9,6 +9,10 @@ export async function registerTelegramRoutes(app: FastifyInstance) {
     if (config.webhookSecret) {
       const secret = request.headers["x-telegram-bot-api-secret-token"];
       if (secret !== config.webhookSecret) {
+        await recordTelegramWebhookEvent("invalid_secret", {
+          hasSecretHeader: Boolean(secret),
+          userAgent: request.headers["user-agent"] ?? null
+        });
         throw new DomainError("FORBIDDEN", "Telegram webhook secret is invalid.", 403);
       }
     }

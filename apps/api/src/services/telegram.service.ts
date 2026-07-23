@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { prisma } from "@scan-krwalo/database";
+import { prisma, Prisma } from "@scan-krwalo/database";
 import { DomainError } from "@scan-krwalo/shared";
 import { env } from "../env.js";
 import { getSettings } from "./settings.service.js";
@@ -83,10 +83,15 @@ export async function unlinkScannerTelegram(userId: string) {
 export async function handleTelegramWebhook(update: TelegramUpdate) {
   const text = update.message?.text?.trim() ?? "";
   const chatId = update.message?.chat?.id;
-  if (!chatId || !text.startsWith("/start")) return { handled: false };
+  if (!chatId || !text.startsWith("/start")) {
+    await recordTelegramWebhookEvent("ignored_update", { hasChatId: Boolean(chatId), textPreview: text.slice(0, 24) });
+    return { handled: false };
+  }
+  await recordTelegramWebhookEvent("start_received", { chatId: String(chatId), textPreview: text.slice(0, 24) });
   const [, token] = text.split(/\s+/, 2);
   if (!token) {
     await sendTelegramMessage(String(chatId), "Open Telegram from your Scan Krwalo scanner dashboard to link this bot.");
+    await recordTelegramWebhookEvent("missing_token", { chatId: String(chatId) });
     return { handled: true };
   }
   const scanner = await prisma.scannerProfile.findUnique({
@@ -95,6 +100,7 @@ export async function handleTelegramWebhook(update: TelegramUpdate) {
   });
   if (!scanner || scanner.user.role !== "SCANNER" || scanner.user.activationStatus !== "ACTIVE" || scanner.user.accountStatus !== "ACTIVE") {
     await sendTelegramMessage(String(chatId), "This Telegram link is invalid or expired. Generate a new link from your scanner dashboard.");
+    await recordTelegramWebhookEvent("invalid_token", { chatId: String(chatId), tokenPreview: token.slice(0, 8) });
     return { handled: true };
   }
   const chatIdValue = String(chatId);
@@ -115,6 +121,7 @@ export async function handleTelegramWebhook(update: TelegramUpdate) {
     });
   });
   await sendTelegramMessage(String(chatId), `Telegram alerts are linked for ${scanner.user.username}. New live tasks will appear here.`);
+  await recordTelegramWebhookEvent("linked", { chatId: chatIdValue, scannerId: scanner.id, username: scanner.user.username });
   return { handled: true, linked: true };
 }
 
@@ -168,7 +175,8 @@ export async function getTelegramWebhookInfo() {
     pendingUpdateCount: body.result?.pending_update_count ?? 0,
     lastErrorDate: body.result?.last_error_date ? new Date(body.result.last_error_date * 1000).toISOString() : null,
     lastErrorMessage: body.result?.last_error_message ?? null,
-    allowedUpdates: body.result?.allowed_updates ?? []
+    allowedUpdates: body.result?.allowed_updates ?? [],
+    recentEvents: await getRecentTelegramWebhookEvents()
   };
 }
 
@@ -206,4 +214,28 @@ async function sendTelegramMessage(chatId: string, text: string, replyMarkup?: u
     const body = await response.text().catch(() => "");
     throw new Error(`Telegram sendMessage failed (${response.status}): ${body}`);
   }
+}
+
+export async function recordTelegramWebhookEvent(event: string, metadata: Record<string, unknown>) {
+  await prisma.auditLog.create({
+    data: {
+      action: `TELEGRAM_WEBHOOK_${event.toUpperCase()}`,
+      entityType: "TelegramWebhook",
+      metadata: metadata as Prisma.InputJsonObject
+    }
+  }).catch((error) => console.error("Failed to record Telegram webhook event", { event, error }));
+}
+
+async function getRecentTelegramWebhookEvents() {
+  const rows = await prisma.auditLog.findMany({
+    where: { entityType: "TelegramWebhook" },
+    orderBy: { createdAt: "desc" },
+    take: 10,
+    select: { action: true, metadata: true, createdAt: true }
+  });
+  return rows.map((row) => ({
+    action: row.action,
+    metadata: row.metadata,
+    createdAt: row.createdAt.toISOString()
+  }));
 }

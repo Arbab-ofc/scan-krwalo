@@ -17,6 +17,16 @@ type Settings = {
   telegramWebhookSecret: string;
 };
 
+type TelegramWebhookInfo = {
+  configured: boolean;
+  url: string;
+  pendingUpdateCount: number;
+  lastErrorDate: string | null;
+  lastErrorMessage: string | null;
+  allowedUpdates: string[];
+  recentEvents: Array<{ action: string; createdAt: string; metadata: unknown }>;
+};
+
 export default function AdminSettingsPage() {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [reward, setReward] = useState("");
@@ -27,6 +37,8 @@ export default function AdminSettingsPage() {
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
   const [installingWebhook, setInstallingWebhook] = useState(false);
+  const [checkingWebhook, setCheckingWebhook] = useState(false);
+  const [webhookInfo, setWebhookInfo] = useState<TelegramWebhookInfo | null>(null);
 
   function settingsPayload() {
     const payload: Record<string, string> = {
@@ -83,7 +95,9 @@ export default function AdminSettingsPage() {
         method: "POST",
         body: JSON.stringify(settingsPayload())
       });
+      const info = await api<TelegramWebhookInfo>("/admin/telegram/webhook");
       const updated = await api<Settings>("/admin/settings");
+      setWebhookInfo(info);
       setSettings(updated);
       setReward(minorUnitsToDisplay(updated.defaultScannerReward));
       setTelegramUsername(updated.telegramUsername ?? "");
@@ -95,6 +109,18 @@ export default function AdminSettingsPage() {
       setMessage(error instanceof Error ? error.message : "Could not install Telegram webhook.");
     } finally {
       setInstallingWebhook(false);
+    }
+  }
+
+  async function checkWebhook() {
+    setCheckingWebhook(true);
+    setMessage("");
+    try {
+      setWebhookInfo(await api<TelegramWebhookInfo>("/admin/telegram/webhook"));
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not check Telegram webhook.");
+    } finally {
+      setCheckingWebhook(false);
     }
   }
 
@@ -167,10 +193,34 @@ export default function AdminSettingsPage() {
                   autoComplete="off"
                 />
               </label>
-              <button type="button" onClick={installWebhook} disabled={installingWebhook} className="focus-ring inline-flex items-center justify-center gap-2 rounded-md border border-line bg-white px-5 py-3 font-semibold text-ink disabled:cursor-not-allowed disabled:opacity-70">
-                <RadioTower size={18} />
-                {installingWebhook ? "Installing..." : "Install Telegram webhook"}
-              </button>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <button type="button" onClick={installWebhook} disabled={installingWebhook} className="focus-ring inline-flex items-center justify-center gap-2 rounded-md border border-line bg-white px-5 py-3 font-semibold text-ink disabled:cursor-not-allowed disabled:opacity-70">
+                  <RadioTower size={18} />
+                  {installingWebhook ? "Installing..." : "Install Telegram webhook"}
+                </button>
+                <button type="button" onClick={checkWebhook} disabled={checkingWebhook} className="focus-ring inline-flex items-center justify-center gap-2 rounded-md border border-line bg-white px-5 py-3 font-semibold text-ink disabled:cursor-not-allowed disabled:opacity-70">
+                  <RadioTower size={18} />
+                  {checkingWebhook ? "Checking..." : "Check webhook"}
+                </button>
+              </div>
+              {webhookInfo && (
+                <div className="rounded-lg border border-line bg-white p-3 text-xs text-slate-600">
+                  <p className="font-semibold text-ink">{webhookInfo.configured ? "Webhook configured" : "Webhook not configured"}</p>
+                  <p className="mt-2 break-safe">URL: {webhookInfo.url || "none"}</p>
+                  <p className="mt-1">Pending updates: {webhookInfo.pendingUpdateCount}</p>
+                  <p className="mt-1 break-safe">Last error: {webhookInfo.lastErrorMessage || "none"}</p>
+                  {webhookInfo.recentEvents.length > 0 && (
+                    <div className="mt-3 grid gap-1">
+                      <p className="font-semibold text-ink">Recent webhook events</p>
+                      {webhookInfo.recentEvents.slice(0, 5).map((event) => (
+                        <p key={`${event.action}-${event.createdAt}`} className="break-safe">
+                          {new Date(event.createdAt).toLocaleString()} - {event.action.replace("TELEGRAM_WEBHOOK_", "").toLowerCase()}
+                        </p>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
           <button disabled={saving} className="focus-ring inline-flex items-center justify-center gap-2 rounded-md bg-accent px-5 py-3 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-70">
