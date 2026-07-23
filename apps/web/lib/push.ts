@@ -95,6 +95,11 @@ function initOneSignal(appId: string) {
         settled = true;
         resolve(OneSignal);
       } catch (error) {
+        if (isAlreadyInitializedError(error)) {
+          settled = true;
+          resolve(OneSignal);
+          return;
+        }
         settled = true;
         initPromise = null;
         reject(error);
@@ -108,6 +113,10 @@ function initOneSignal(appId: string) {
     }, 10_000);
   });
   return initPromise;
+}
+
+function isAlreadyInitializedError(error: unknown) {
+  return error instanceof Error && /already initialized/i.test(error.message);
 }
 
 async function waitForSubscriptionId(oneSignal: OneSignalSdk) {
