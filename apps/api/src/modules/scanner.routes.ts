@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { prisma } from "@scan-krwalo/database";
 import { requireRole } from "../authz.js";
 import { ok } from "../http.js";
-import { liveTasks } from "../services/tasks.service.js";
+import { expireDueTasks, liveTasks } from "../services/tasks.service.js";
 import { requestPayout, updateScannerProfile } from "../services/payouts.service.js";
 import { getPagination, paginated } from "../pagination.js";
 import { countOnlineScanners, setScannerOnline } from "../services/presence.service.js";
@@ -35,6 +35,7 @@ export async function registerScannerRoutes(app: FastifyInstance) {
   });
   app.get("/current-task", async (request, reply) => {
     const user = await requireRole(request, ["SCANNER"]);
+    await expireDueTasks();
     const scanner = await prisma.scannerProfile.findUnique({ where: { userId: user.id } });
     const tasks = scanner ? await prisma.task.findMany({
       where: { assignedScannerId: scanner.id, status: { in: ["CLAIMED", "SCANNER_SUBMITTED", "DISPUTED"] } },

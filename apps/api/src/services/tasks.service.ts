@@ -26,6 +26,7 @@ type StoredTaskProof = {
 };
 
 const UNCLAIMED_TASK_REFUND_SECONDS = 120;
+const SCANNER_COMPLETION_SECONDS = 180;
 
 function publicId() {
   return `TASK-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
@@ -171,7 +172,7 @@ export async function createTask(actorUserId: string, actorRole: "CLIENT" | "ADM
       now,
       claimExpiresAt,
       taskClaimWindowSeconds: UNCLAIMED_TASK_REFUND_SECONDS,
-      taskCompletionWindowSeconds: settings.taskCompletionWindowSeconds,
+      taskCompletionWindowSeconds: SCANNER_COMPLETION_SECONDS,
       clientReviewWindowSeconds: settings.clientReviewWindowSeconds
     });
   });
@@ -211,7 +212,7 @@ export async function createBulkTasks(actorUserId: string, actorRole: "CLIENT" |
         now,
         claimExpiresAt,
         taskClaimWindowSeconds: UNCLAIMED_TASK_REFUND_SECONDS,
-        taskCompletionWindowSeconds: settings.taskCompletionWindowSeconds,
+        taskCompletionWindowSeconds: SCANNER_COMPLETION_SECONDS,
         clientReviewWindowSeconds: settings.clientReviewWindowSeconds
       }));
     }
@@ -473,7 +474,7 @@ export async function listTasks(userId: string, role: string, pagination: Pagina
 }
 
 export async function liveTasks(pagination: Pagination) {
-  await expireDueUnclaimedTasks();
+  await expireDueTasks();
   const where = { status: "AVAILABLE" as const, claimExpiresAt: { gt: new Date() } };
   const [items, total] = await Promise.all([
     prisma.task.findMany({ where, orderBy: { publishedAt: "desc" }, skip: pagination.skip, take: pagination.limit }),
@@ -537,6 +538,71 @@ export async function expireUnclaimedTask(taskId: string) {
   return expired;
 }
 
+export async function expireIncompleteTask(taskId: string) {
+  const expired = await prisma.$transaction(async (tx) => {
+    const task = await tx.task.findUnique({
+      where: { id: taskId },
+      include: { client: { include: { creditAccount: true } }, assignedScanner: true }
+    });
+    if (!task || task.status !== "CLAIMED" || !task.completionExpiresAt || task.completionExpiresAt > new Date()) return null;
+    const updated = await tx.task.update({
+      where: { id: task.id },
+      data: { status: "COMPLETION_EXPIRED", expiredAt: new Date(), version: { increment: 1 } }
+    });
+    await tx.taskEvent.create({ data: { taskId, eventType: "TASK_EXPIRED", previousStatus: "CLAIMED", newStatus: "COMPLETION_EXPIRED" } });
+    if (task.assignedScanner) {
+      await tx.scannerProfile.update({
+        where: { id: task.assignedScanner.id },
+        data: { expiredTaskCount: { increment: 1 }, failedTaskCount: { increment: 1 } }
+      });
+    }
+    if (task.client?.creditAccount) {
+      const account = task.client.creditAccount;
+      let ledgerCreated = true;
+      try {
+        await tx.clientCreditTransaction.create({
+          data: {
+            accountId: account.id,
+            clientId: task.client.id,
+            type: "TASK_REFUND",
+            direction: "CREDIT",
+            amount: 1,
+            availableBefore: account.availableCredits,
+            availableAfter: account.availableCredits + 1,
+            reservedBefore: account.reservedCredits,
+            reservedAfter: Math.max(0, account.reservedCredits - 1),
+            usedBefore: account.usedCredits,
+            usedAfter: account.usedCredits,
+            referenceType: "Task",
+            referenceId: task.id,
+            idempotencyKey: `task:${task.id}:credit:completion-expiry-refund`,
+            description: "Reserved credit returned because scanner did not submit proof in time"
+          }
+        });
+      } catch (error) {
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") ledgerCreated = false;
+        else throw error;
+      }
+      if (ledgerCreated) {
+        await tx.clientCreditAccount.update({ where: { id: account.id }, data: { availableCredits: { increment: 1 }, reservedCredits: { decrement: 1 } } });
+        await tx.clientProfile.update({ where: { id: task.client.id }, data: { availableTaskCredits: { increment: 1 }, reservedTaskCredits: { decrement: 1 } } });
+      }
+    }
+    return updated;
+  }, { maxWait: 10_000, timeout: 20_000 });
+  if (expired) {
+    emitToUser(expired.postedByUserId, "credits:updated", { taskId: expired.id });
+    emitToRole("SCANNER", "task:expired", { taskId: expired.id, publicId: expired.publicId });
+    emitToRole("SCANNER", "task:removed", { taskId: expired.id, publicId: expired.publicId });
+    emitToRole("ADMIN", "task:updated", { taskId: expired.id, status: expired.status });
+    if (expired.assignedScannerId) {
+      const scanner = await prisma.scannerProfile.findUnique({ where: { id: expired.assignedScannerId }, select: { userId: true } });
+      if (scanner) emitToUser(scanner.userId, "task:updated", { taskId: expired.id, status: expired.status });
+    }
+  }
+  return expired;
+}
+
 export async function expireDueUnclaimedTasks() {
   const dueTasks = await prisma.task.findMany({
     where: { status: "AVAILABLE", claimExpiresAt: { lte: new Date() } },
@@ -544,6 +610,20 @@ export async function expireDueUnclaimedTasks() {
     take: 25
   });
   await Promise.all(dueTasks.map((task) => expireUnclaimedTask(task.id)));
+}
+
+export async function expireDueIncompleteTasks() {
+  const dueTasks = await prisma.task.findMany({
+    where: { status: "CLAIMED", completionExpiresAt: { lte: new Date() } },
+    select: { id: true },
+    take: 25
+  });
+  await Promise.all(dueTasks.map((task) => expireIncompleteTask(task.id)));
+}
+
+export async function expireDueTasks() {
+  await expireDueUnclaimedTasks();
+  await expireDueIncompleteTasks();
 }
 
 async function deleteProofFiles(storageKeys: string[]) {
